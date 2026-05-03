@@ -159,7 +159,7 @@ mq.addEventListener('change', onSystemThemeChange)
 
       <section class="panel panel-right">
         <div v-if="analysisStore.status === 'idle'" class="placeholder">
-          <RecentSummary />
+          <RecentSummary @open-history="showHistory = true" />
           <div class="placeholder-art">
             <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
               <rect x="14" y="10" width="52" height="60" rx="4" fill="currentColor" opacity="0.06"/>

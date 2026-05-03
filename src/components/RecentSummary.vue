@@ -2,6 +2,7 @@
 import { computed, onMounted } from 'vue'
 import { useHistoryStore } from '../stores/history.js'
 
+const emit = defineEmits(['open-history'])
 const store = useHistoryStore()
 
 onMounted(() => {
@@ -28,7 +29,8 @@ function formatWordCount(n) {
   return String(n)
 }
 
-const levelLabel = (l) => ({ deep: '深度分析', quick: '快速分析' }[l] || l)
+const levelLabel = (l) => ({ deep: '深度分析', quick: '快速分析', skip: '无需分析' }[l] || l)
+const levelClass = (l) => ['deep', 'quick', 'skip'].includes(l) ? `badge-${l}` : 'badge-mode'
 const modeLabel = (m) => ({ report: '报告模式', annotate: '标注模式' }[m] || m)
 
 function handleClick() {
@@ -42,9 +44,8 @@ function handleClick() {
 </script>
 
 <template>
-  <div v-if="entry" class="recent-card" @click="handleClick">
+  <div v-if="entry" class="recent-card">
     <div class="recent-top">
-      <span class="recent-icon">📋</span>
       <span class="recent-label">最近分析</span>
       <span class="recent-date">{{ formatDate(entry.date) }}</span>
     </div>
@@ -52,10 +53,15 @@ function handleClick() {
     <p class="recent-preview">"{{ entry.preview || '（无预览）' }}"</p>
 
     <div class="recent-badges">
-      <span class="badge" :class="'badge-' + entry.level">{{ levelLabel(entry.level) }}</span>
+      <span class="badge" :class="levelClass(entry.level)">{{ levelLabel(entry.level) }}</span>
       <span class="badge badge-mode">{{ modeLabel(entry.outputMode) }}</span>
       <span v-if="entry.issueCount" class="badge badge-issues">{{ entry.issueCount }} 个问题</span>
       <span class="badge badge-words">{{ formatWordCount(entry.wordCount) }} 字</span>
+    </div>
+
+    <div class="recent-actions">
+      <button class="recent-btn primary" @click="handleClick">恢复报告</button>
+      <button class="recent-btn" @click="emit('open-history')">查看历史</button>
     </div>
   </div>
 </template>
@@ -67,13 +73,6 @@ function handleClick() {
   background: var(--bg-card);
   box-shadow: var(--shadow);
   padding: 16px 18px;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.recent-card:hover {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
 }
 
 /* ── Top row ── */
@@ -82,11 +81,6 @@ function handleClick() {
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
-}
-
-.recent-icon {
-  font-size: 14px;
-  line-height: 1;
 }
 
 .recent-label {
@@ -138,6 +132,11 @@ function handleClick() {
   color: var(--warning);
 }
 
+.badge-skip {
+  background: var(--bg);
+  color: var(--text-muted);
+}
+
 .badge-mode {
   background: var(--bg);
   color: var(--text-muted);
@@ -152,5 +151,45 @@ function handleClick() {
 .badge-words {
   background: var(--success-soft);
   color: var(--success);
+}
+
+/* ── Actions ── */
+.recent-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-light);
+}
+
+.recent-btn {
+  flex: 1;
+  padding: 7px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.recent-btn:hover {
+  background: var(--bg);
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.recent-btn.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.recent-btn.primary:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.25);
 }
 </style>

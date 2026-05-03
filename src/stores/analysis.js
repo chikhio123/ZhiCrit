@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { useHistoryStore } from './history.js'
 
 export const useAnalysisStore = defineStore('analysis', {
   state: () => ({
@@ -132,6 +133,13 @@ export const useAnalysisStore = defineStore('analysis', {
           this.annotations = result.annotations || []
           this.outputMode = result.outputMode || this.outputMode
           this.lastOutputMode = this.outputMode
+
+          // Persist to localStorage as backup (Electron main saves to file)
+          if (result.level !== 'skip') {
+            const historyStore = useHistoryStore()
+            historyStore.addEntry(this.articleText, result)
+          }
+
           if (result.level === 'skip') {
             window.__toast?.info('该文章无需深度分析')
           } else {
@@ -163,6 +171,11 @@ export const useAnalysisStore = defineStore('analysis', {
           this.annotations = result.annotations || []
           this.outputMode = result.outputMode || this.outputMode
           this.lastOutputMode = this.outputMode
+
+          if (result.level !== 'skip') {
+            const historyStore = useHistoryStore()
+            historyStore.addEntry(this.articleText, result)
+          }
         }
         return
       }

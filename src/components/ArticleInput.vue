@@ -4,6 +4,47 @@ import { useAnalysisStore } from '../stores/analysis.js'
 
 const analysisStore = useAnalysisStore()
 const isFocused = ref(false)
+const fileInput = ref(null)
+
+const ALLOWED_EXTS = ['.txt', '.md']
+const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
+
+function triggerImport() {
+  fileInput.value?.click()
+}
+
+function handleFileChange(e) {
+  const file = e.target.files?.[0]
+  // Reset early so re-selecting the same file always triggers change
+  e.target.value = ''
+
+  if (!file) return
+
+  const ext = '.' + file.name.split('.').pop()?.toLowerCase()
+  if (!ALLOWED_EXTS.includes(ext)) {
+    window.__toast?.warning('不支持的文件格式，请选择 .txt 或 .md 文件')
+    return
+  }
+
+  if (file.size > MAX_FILE_SIZE) {
+    window.__toast?.warning(`文件过大（${(file.size / 1024 / 1024).toFixed(1)}MB），请选择小于 2MB 的文件`)
+    return
+  }
+
+  if (analysisStore.articleText.trim().length > 0) {
+    if (!window.confirm('导入文件将替换当前已输入的内容，确定继续？')) return
+  }
+
+  const reader = new FileReader()
+  reader.onload = () => {
+    analysisStore.articleText = reader.result || ''
+    window.__toast?.success(`已导入：${file.name}`)
+  }
+  reader.onerror = () => {
+    window.__toast?.error('文件读取失败，请重试')
+  }
+  reader.readAsText(file, 'UTF-8')
+}
 
 const wordCount = computed(() => analysisStore.articleText.length)
 const canAnalyze = computed(() => analysisStore.articleText.trim().length > 0 && !analysisStore.isRunning)
@@ -37,6 +78,14 @@ const modeLabel = computed(() => {
         <span>文章内容</span>
       </div>
       <div class="topbar-right">
+        <button class="btn-import" title="导入文件" :disabled="analysisStore.isRunning" @click="triggerImport">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          导入
+        </button>
         <span class="word-badge" :class="{ 'has-content': wordCount > 0 }">
           {{ wordCount.toLocaleString() }} 字
         </span>
@@ -125,6 +174,14 @@ const modeLabel = computed(() => {
         清空
       </button>
     </div>
+
+    <input
+      ref="fileInput"
+      type="file"
+      accept=".txt,.md"
+      class="file-input-hidden"
+      @change="handleFileChange"
+    />
   </div>
 </template>
 
@@ -174,6 +231,36 @@ const modeLabel = computed(() => {
 .word-badge.has-content {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+.btn-import {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.btn-import:hover {
+  background: var(--bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-import:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.file-input-hidden {
+  display: none;
 }
 
 /* ── Mode Selector ── */

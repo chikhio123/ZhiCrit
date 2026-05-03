@@ -113,16 +113,56 @@ export const useHistoryStore = defineStore('history', {
       try {
         if (window.zhicrit) {
           await window.zhicrit.deleteHistory(id)
-        } else {
-          this.list = this.list.filter(e => e.id !== id)
-          localStorage.setItem('zhicrit-history', JSON.stringify(this.list))
-          localStorage.removeItem(`zhicrit-history-${id}`)
-          return
         }
         this.list = this.list.filter(e => e.id !== id)
+        this._syncLocal()
+        localStorage.removeItem(`zhicrit-history-${id}`)
       } catch (e) {
         console.error('Failed to delete history entry:', e)
       }
+    },
+
+    addEntry(articleText, result) {
+      const now = new Date()
+      const id = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+      const wordCount = articleText.length
+      const preview = articleText.replace(/\s+/g, '').slice(0, 40)
+      const issueCount = (result.annotations || []).length || 0
+
+      // Deduplicate
+      const dupIdx = this.list.findIndex(e => e.articleText === articleText)
+      if (dupIdx !== -1) {
+        const oldId = this.list[dupIdx].id
+        this.list.splice(dupIdx, 1)
+        localStorage.removeItem(`zhicrit-history-${oldId}`)
+      }
+
+      const entry = {
+        id,
+        date: now.toISOString(),
+        preview,
+        wordCount,
+        level: result.level,
+        issueCount,
+        outputMode: result.outputMode,
+        articleText
+      }
+      this.list.unshift(entry)
+
+      // Save report content to localStorage (browser fallback)
+      if (result.report) {
+        try {
+          localStorage.setItem(`zhicrit-history-${id}`, result.report)
+        } catch (_) { /* quota exceeded, non-critical */ }
+      }
+
+      this._syncLocal()
+    },
+
+    _syncLocal() {
+      try {
+        localStorage.setItem('zhicrit-history', JSON.stringify(this.list))
+      } catch (_) { /* quota exceeded, non-critical */ }
     }
   }
 })
