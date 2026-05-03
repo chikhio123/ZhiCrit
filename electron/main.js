@@ -43,7 +43,16 @@ function getPromptPath(name) {
   if (isDev) {
     return path.join(__dirname, '..', 'src', 'prompts', name)
   }
+  // In production, prompts are in the extraResources directory
   return path.join(process.resourcesPath, 'prompts', name)
+}
+
+// Ensure output dir exists
+function ensureOutputDir() {
+  const outDir = path.join(__dirname, '..', 'output')
+  if (!fs.existsSync(outDir)) {
+    fs.mkdirSync(outDir, { recursive: true })
+  }
 }
 
 function loadPrompt(name) {
@@ -97,7 +106,7 @@ ipcMain.handle('report:save', async (_event, markdown) => {
   return { success: false }
 })
 
-ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep') => {
+ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', outputMode = 'report') => {
   const config = loadConfig()
 
   if (!config.api_key) {
@@ -108,6 +117,7 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep') => {
   const { extract } = require('../src/core/extract')
   const { detect } = require('../src/core/detect')
   const { report } = require('../src/core/report')
+  const { annotate } = require('../src/core/annotate')
 
   const send = (payload) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -130,6 +140,7 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep') => {
     }
 
     // User-selected mode overrides triage level (except skip)
+    const isAnnotate = outputMode === 'annotate'
     const isQuick = triageResult.level !== 'skip' && mode === 'quick'
     let extractResult = null
     let detectResult = null
@@ -150,14 +161,36 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep') => {
       send({ step: 'detect', status: 'done', result: { skipped: true } })
     }
 
-    // Step 4: Report — always run, even for quick (generates formatted report)
-    send({ step: 'report', status: 'running' })
-    const reportText = await report(
+    // Step 4-5: Report and/or Annotate depending on outputMode
+    let reportText = null
+    let annotateResult = null
+
+    if (isAnnotate) {
+      // 标注模式：skip report, annotate is the main output
+      send({ step: 'report', status: 'done', result: { skipped: true } })
+    } else {
+      // 分析模式：generate report first, then annotate as supplement
+      send({ step: 'report', status: 'running' })
+      reportText = await report(
+        articleText, triageResult, extractResult, detectResult, config, (p) => loadPrompt(p)
+      )
+      send({ step: 'report', status: 'done', result: { markdown: reportText } })
+    }
+
+    // Annotate: in annotation mode it's the main output; in report mode it
+    // still runs so switching modes later is instant (cache hit).
+    send({ step: 'annotate', status: 'running' })
+    annotateResult = await annotate(
       articleText, triageResult, extractResult, detectResult, config, (p) => loadPrompt(p)
     )
-    send({ step: 'report', status: 'done', result: { markdown: reportText } })
+    send({ step: 'annotate', status: 'done', result: annotateResult })
 
-    finalResult = { level: isQuick ? 'quick' : 'deep', report: reportText }
+    finalResult = {
+      level: isQuick ? 'quick' : 'deep',
+      outputMode,
+      report: reportText,
+      annotations: annotateResult.annotations || []
+    }
     send({ step: 'done', result: finalResult })
 
     return { success: true, ...finalResult }

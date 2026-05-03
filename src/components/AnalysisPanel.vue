@@ -5,15 +5,26 @@ import { useAnalysisStore } from '../stores/analysis.js'
 const analysisStore = useAnalysisStore()
 const expanded = ref(false)
 
-const steps = [
-  { key: 'triage', label: '预判', desc: '判断文章是否值得分析' },
-  { key: 'extract', label: '结构提取', desc: '提取论证骨架与推理链' },
-  { key: 'detect', label: '问题标记', desc: '逐项检查逻辑问题' },
-  { key: 'report', label: '报告生成', desc: '整合为结构化报告' }
-]
+const isAnnotate = computed(() => analysisStore.outputMode === 'annotate')
+
+const steps = computed(() => {
+  const base = [
+    { key: 'triage', label: '预判', desc: '判断文章是否值得分析' },
+    { key: 'extract', label: '结构提取', desc: '提取论证骨架与推理链' },
+    { key: 'detect', label: '问题标记', desc: '逐项检查逻辑问题' }
+  ]
+  if (isAnnotate.value) {
+    base.push({ key: 'annotate', label: '原文标注', desc: '在原文上标记重点句子' })
+  } else {
+    base.push({ key: 'report', label: '报告生成', desc: '整合为结构化报告' })
+  }
+  return base
+})
+
+const totalSteps = computed(() => steps.value.length)
 
 const doneCount = computed(() => {
-  return steps.filter(s => analysisStore.steps[s.key].status === 'done').length
+  return steps.value.filter(s => analysisStore.steps[s.key].status === 'done').length
 })
 
 function stepPreview(key) {
@@ -32,6 +43,11 @@ function stepPreview(key) {
     const r = s.result
     const c = r.issues?.filter(i => i.severity === 'critical').length || 0
     return `${r.issues?.length || 0} 问题（${c} 致命）`
+  }
+  if (key === 'annotate') {
+    const r = s.result
+    const count = r?.annotations?.length || 0
+    return `${count} 处标记`
   }
   return null
 }
@@ -52,14 +68,14 @@ function stepPreview(key) {
           <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
         </svg>
         <span class="bar-label">
-          <template v-if="analysisStore.isRunning">{{ doneCount }}/4</template>
+          <template v-if="analysisStore.isRunning">{{ doneCount }}/{{ totalSteps }}</template>
           <template v-else-if="analysisStore.isDone">分析完成</template>
           <template v-else>出错</template>
         </span>
       </div>
       <div class="bar-right">
         <div class="mini-progress">
-          <div class="mini-track" :style="{ width: (doneCount / 4 * 100) + '%' }"></div>
+          <div class="mini-track" :style="{ width: (doneCount / totalSteps * 100) + '%' }"></div>
         </div>
         <svg class="chevron" :class="{ open: expanded }" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="6 9 12 15 18 9"/>

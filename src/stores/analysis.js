@@ -3,21 +3,25 @@ import { defineStore } from 'pinia'
 export const useAnalysisStore = defineStore('analysis', {
   state: () => ({
     status: 'idle', // idle | running | done | error
-    mode: 'deep',    // 'deep' | 'quick' — user-selected analysis mode
+    mode: 'deep',       // 'deep' | 'quick' — analysis depth
+    outputMode: 'report', // 'report' | 'annotate' — output format
     articleText: '',
     articleWordCount: 0,
+    lastAnalyzedText: '', // cache key — skip re-run if same article
 
     // Step states: idle | running | done | error
     steps: {
       triage: { status: 'idle', result: null, error: null },
       extract: { status: 'idle', result: null, error: null },
       detect: { status: 'idle', result: null, error: null },
-      report: { status: 'idle', result: null, error: null }
+      report: { status: 'idle', result: null, error: null },
+      annotate: { status: 'idle', result: null, error: null }
     },
 
     // Final result
     level: null,   // skip | quick | deep
     report: null,   // final markdown
+    annotations: [], // sentence-level annotations
     error: null
   }),
 
@@ -29,7 +33,7 @@ export const useAnalysisStore = defineStore('analysis', {
       return state.status === 'done'
     },
     currentStep(state) {
-      const order = ['triage', 'extract', 'detect', 'report']
+      const order = ['triage', 'extract', 'detect', 'report', 'annotate']
       for (const step of order) {
         if (state.steps[step].status === 'running') return step
         if (state.steps[step].status === 'idle') return step
@@ -43,12 +47,14 @@ export const useAnalysisStore = defineStore('analysis', {
       this.status = 'idle'
       this.level = null
       this.report = null
+      this.annotations = []
       this.error = null
       this.steps = {
         triage: { status: 'idle', result: null, error: null },
         extract: { status: 'idle', result: null, error: null },
         detect: { status: 'idle', result: null, error: null },
-        report: { status: 'idle', result: null, error: null }
+        report: { status: 'idle', result: null, error: null },
+        annotate: { status: 'idle', result: null, error: null }
       }
     },
 
@@ -59,28 +65,51 @@ export const useAnalysisStore = defineStore('analysis', {
 
     async startAnalysis() {
       if (!this.articleText.trim()) return
+
+      // Cache hit: same article, already analyzed, requested output is available
+      const sameArticle = this.articleText === this.lastAnalyzedText
+      if (sameArticle && this.status === 'done') {
+        if (this.outputMode === 'annotate' && this.annotations.length) {
+          return // 标注模式：直接用已有标注
+        }
+        if (this.outputMode === 'report' && this.report) {
+          return // 分析模式：直接用已有报告
+        }
+      }
+
       this.reset()
       this.status = 'running'
+      this.lastAnalyzedText = this.articleText
 
       const cleanup = window.zhicrit.onProgress((payload) => {
         this.handleProgress(payload)
       })
 
       try {
-        const result = await window.zhicrit.startAnalysis(this.articleText, this.mode)
+        const result = await window.zhicrit.startAnalysis(this.articleText, this.mode, this.outputMode)
         if (result.error) {
           this.status = 'error'
           this.error = result.error
-        } else if (result.report) {
+          window.__toast?.error(result.error)
+        } else if (result.success) {
           // Use return value as authoritative — avoids IPC race between
           // webContents.send('analyze:progress') and ipcMain.handle return.
           this.status = 'done'
           this.level = result.level
           this.report = result.report
+          this.annotations = result.annotations || []
+          this.outputMode = result.outputMode || this.outputMode
+          if (result.level === 'skip') {
+            window.__toast?.info('该文章无需深度分析')
+          } else {
+            const label = this.outputMode === 'annotate' ? '标注完成～' : '分析完成～'
+            window.__toast?.success(label)
+          }
         }
       } catch (err) {
         this.status = 'error'
         this.error = err.message
+        window.__toast?.error(err.message || '分析失败')
       } finally {
         // Delay cleanup to allow in-flight progress messages to arrive
         setTimeout(() => cleanup(), 100)
@@ -95,6 +124,8 @@ export const useAnalysisStore = defineStore('analysis', {
         if (result) {
           this.level = result.level
           this.report = result.report
+          this.annotations = result.annotations || []
+          this.outputMode = result.outputMode || this.outputMode
         }
         return
       }
@@ -118,6 +149,7 @@ export const useAnalysisStore = defineStore('analysis', {
           this.steps.extract.status = 'done'
           this.steps.detect.status = 'done'
           this.steps.report.status = 'done'
+          this.steps.annotate.status = 'done'
         }
       }
     }

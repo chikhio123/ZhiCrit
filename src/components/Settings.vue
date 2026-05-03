@@ -34,6 +34,7 @@ async function handleSave() {
   configStore.temperature = Number(form.value.temperature)
   await configStore.save()
   saved.value = true
+  window.__toast?.success('配置已保存～')
   setTimeout(() => { saved.value = false }, 2000)
 }
 

@@ -7,6 +7,8 @@ import 'highlight.js/styles/github.css'
 
 const analysisStore = useAnalysisStore()
 const copied = ref(false)
+const isAnnotateMode = computed(() => analysisStore.outputMode === 'annotate')
+const activeAnnotation = ref(null)
 
 marked.setOptions({ breaks: true, gfm: true })
 
@@ -28,17 +30,70 @@ const levelLabel = computed(() => {
   return map[analysisStore.level] || ''
 })
 
+// Build annotated segments from original text + annotations
+const annotatedSegments = computed(() => {
+  const text = analysisStore.articleText
+  const annotations = analysisStore.annotations
+  if (!text || !annotations.length) return []
+
+  // Sort by position in text
+  const positioned = annotations
+    .map((a, i) => ({ ...a, _id: i, pos: text.indexOf(a.quote) }))
+    .filter(a => a.pos !== -1)
+    .sort((a, b) => a.pos - b.pos)
+
+  const segments = []
+  let cursor = 0
+  for (const ann of positioned) {
+    if (ann.pos < cursor) continue
+    if (ann.pos > cursor) {
+      segments.push({ text: text.slice(cursor, ann.pos), mark: null, _id: null })
+    }
+    segments.push({ text: ann.quote, mark: ann.mark, reason: ann.reason, _id: ann._id })
+    cursor = ann.pos + ann.quote.length
+  }
+  if (cursor < text.length) {
+    segments.push({ text: text.slice(cursor), mark: null, _id: null })
+  }
+  return segments
+})
+
+const markLabel = (mark) => ({ yellow: '疑似AI', red: '逻辑问题', green: '可取之处' }[mark] || mark)
+
+function handleMarkClick(seg, event) {
+  if (!seg.mark) {
+    activeAnnotation.value = null
+    return
+  }
+  const rect = event.target.getBoundingClientRect()
+  activeAnnotation.value = {
+    mark: seg.mark,
+    reason: seg.reason,
+    quote: seg.text,
+    x: rect.left + rect.width / 2,
+    y: rect.bottom + 6
+  }
+}
+
+function dismissTooltip() {
+  activeAnnotation.value = null
+}
+
 async function handleCopy() {
   if (!analysisStore.report) return
   await navigator.clipboard.writeText(analysisStore.report)
   copied.value = true
+  window.__toast?.success('已复制到剪贴板～')
   setTimeout(() => { copied.value = false }, 2000)
 }
 
 async function handleSave() {
   if (!analysisStore.report) return
   if (window.zhicrit) {
-    await window.zhicrit.saveReport(analysisStore.report)
+    const result = await window.zhicrit.saveReport(analysisStore.report)
+    if (result.success) {
+      window.__toast?.success('报告已保存～')
+    }
   } else {
     const blob = new Blob([analysisStore.report], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
@@ -47,18 +102,53 @@ async function handleSave() {
     a.download = `analysis-${Date.now()}.md`
     a.click()
     URL.revokeObjectURL(url)
+    window.__toast?.success('报告已下载～')
   }
 }
 </script>
 
 <template>
-  <div class="report-view">
-    <template v-if="analysisStore.report">
+  <div class="report-view" @click="dismissTooltip">
+    <!-- ===== 标注模式：直接显示标注视图 ===== -->
+    <template v-if="isAnnotateMode && analysisStore.isDone">
       <div class="report-toolbar">
         <div class="toolbar-left">
           <span class="level-badge" :class="`level-${analysisStore.level}`">
             {{ levelLabel }}
           </span>
+          <span class="mode-indicator annotate-indicator">标注模式</span>
+        </div>
+      </div>
+      <div class="annotate-body">
+        <div class="annotate-legend">
+          <span class="legend-item"><span class="legend-dot yellow"></span> 疑似AI</span>
+          <span class="legend-item"><span class="legend-dot red"></span> 逻辑问题</span>
+          <span class="legend-item"><span class="legend-dot green"></span> 可取之处</span>
+        </div>
+        <div class="annotate-text" v-if="annotatedSegments.length">
+          <span
+            v-for="(seg, i) in annotatedSegments"
+            :key="i"
+            class="annotate-seg"
+            :class="{ ['mark-' + seg.mark]: seg.mark }"
+            @click.stop="handleMarkClick(seg, $event)"
+          >{{ seg.text }}</span>
+        </div>
+        <div v-else class="annotate-empty">
+          <p>标注数据暂不可用</p>
+          <p class="sub">可能是标注步骤未完成，或标注结果无法匹配到原文</p>
+        </div>
+      </div>
+    </template>
+
+    <!-- ===== 分析模式：仅显示报告 ===== -->
+    <template v-else-if="analysisStore.report">
+      <div class="report-toolbar">
+        <div class="toolbar-left">
+          <span class="level-badge" :class="`level-${analysisStore.level}`">
+            {{ levelLabel }}
+          </span>
+          <span class="mode-indicator report-indicator">分析模式</span>
         </div>
         <div class="toolbar-right">
           <button class="tb-btn" @click="handleCopy">
@@ -87,6 +177,23 @@ async function handleSave() {
       </div>
       <p>正在生成报告...</p>
     </div>
+
+    <!-- Tooltip -->
+    <Teleport to="body">
+      <div
+        v-if="activeAnnotation"
+        class="annotate-tooltip"
+        :class="'tooltip-' + activeAnnotation.mark"
+        :style="{ left: activeAnnotation.x + 'px', top: activeAnnotation.y + 'px' }"
+        @click.stop
+      >
+        <div class="tooltip-header">
+          <span class="tooltip-dot" :class="activeAnnotation.mark"></span>
+          {{ markLabel(activeAnnotation.mark) }}
+        </div>
+        <p class="tooltip-reason">{{ activeAnnotation.reason }}</p>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -106,6 +213,12 @@ async function handleSave() {
   margin-bottom: 24px;
   border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .toolbar-right {
@@ -133,6 +246,21 @@ async function handleSave() {
 .level-skip {
   background: var(--bg);
   color: var(--text-muted);
+}
+
+.mode-indicator {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 10px;
+}
+.mode-indicator.report-indicator {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.mode-indicator.annotate-indicator {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
 }
 
 .tb-btn {
@@ -285,6 +413,136 @@ async function handleSave() {
 }
 .markdown-body :deep(a:hover) {
   text-decoration: underline;
+}
+
+/* ── Annotation View ── */
+.annotate-body {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 60px;
+}
+
+.annotate-legend {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.legend-dot.yellow { background: #eab308; }
+.legend-dot.red   { background: #ef4444; }
+.legend-dot.green { background: #22c55e; }
+
+.annotate-text {
+  font-size: 15px;
+  line-height: 2;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.annotate-seg {
+  cursor: default;
+  transition: background 0.15s;
+}
+
+.annotate-seg.mark-yellow {
+  background: rgba(234, 179, 8, 0.2);
+  border-bottom: 2px solid rgba(234, 179, 8, 0.5);
+  cursor: pointer;
+}
+.annotate-seg.mark-yellow:hover {
+  background: rgba(234, 179, 8, 0.35);
+}
+
+.annotate-seg.mark-red {
+  background: rgba(239, 68, 68, 0.12);
+  border-bottom: 2px solid rgba(239, 68, 68, 0.5);
+  text-decoration: underline;
+  text-decoration-color: rgba(239, 68, 68, 0.4);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.annotate-seg.mark-red:hover {
+  background: rgba(239, 68, 68, 0.22);
+}
+
+.annotate-seg.mark-green {
+  background: rgba(34, 197, 94, 0.12);
+  border-bottom: 2px solid rgba(34, 197, 94, 0.5);
+  cursor: pointer;
+}
+.annotate-seg.mark-green:hover {
+  background: rgba(34, 197, 94, 0.22);
+}
+
+.annotate-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+.annotate-empty .sub {
+  font-size: 12px;
+  margin-top: 6px;
+  opacity: 0.7;
+}
+
+/* ── Tooltip ── */
+.annotate-tooltip {
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 10000;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  padding: 14px 18px;
+  max-width: 320px;
+  border: 1px solid var(--border);
+  animation: tooltip-in 0.15s ease-out;
+}
+
+@keyframes tooltip-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.tooltip-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.tooltip-dot.yellow { background: #eab308; }
+.tooltip-dot.red   { background: #ef4444; }
+.tooltip-dot.green { background: #22c55e; }
+
+.tooltip-reason {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+  margin: 0;
 }
 
 /* ── Waiting ── */

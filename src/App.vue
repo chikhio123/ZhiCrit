@@ -4,6 +4,7 @@ import ArticleInput from './components/ArticleInput.vue'
 import AnalysisPanel from './components/AnalysisPanel.vue'
 import ReportView from './components/ReportView.vue'
 import Settings from './components/Settings.vue'
+import ToastMessage from './components/ToastMessage.vue'
 import { useConfigStore } from './stores/config.js'
 import { useAnalysisStore } from './stores/analysis.js'
 
@@ -76,55 +77,57 @@ configStore.load()
     </header>
 
     <main class="app-main">
-      <Settings v-if="showSettings" />
+      <Transition name="settings-slide">
+        <Settings v-if="showSettings" class="settings-overlay" />
+      </Transition>
 
-      <template v-else>
-        <aside class="panel panel-left" :style="{ width: leftWidth + 'px' }">
-          <ArticleInput />
-          <AnalysisPanel />
-        </aside>
+      <aside class="panel panel-left" :style="{ width: leftWidth + 'px' }">
+        <ArticleInput />
+        <AnalysisPanel />
+      </aside>
 
-        <div
-          class="divider"
-          :class="{ dragging }"
-          @mousedown="onMouseDown"
-        >
-          <div class="divider-line"></div>
+      <div
+        class="divider"
+        :class="{ dragging }"
+        @mousedown="onMouseDown"
+      >
+        <div class="divider-line"></div>
+      </div>
+
+      <section class="panel panel-right">
+        <div v-if="analysisStore.status === 'idle'" class="placeholder">
+          <div class="placeholder-art">
+            <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+              <rect x="14" y="10" width="52" height="60" rx="4" fill="currentColor" opacity="0.06"/>
+              <rect x="22" y="20" width="36" height="4" rx="2" fill="currentColor" opacity="0.15"/>
+              <rect x="22" y="30" width="28" height="3" rx="1.5" fill="currentColor" opacity="0.1"/>
+              <rect x="22" y="38" width="32" height="3" rx="1.5" fill="currentColor" opacity="0.1"/>
+              <rect x="22" y="46" width="24" height="3" rx="1.5" fill="currentColor" opacity="0.1"/>
+              <circle cx="60" cy="60" r="14" fill="var(--accent)" opacity="0.12"/>
+              <path d="M56 57l3-3 6 6" stroke="var(--accent)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+            </svg>
+          </div>
+          <p class="placeholder-title">准备就绪</p>
+          <p class="placeholder-desc">在左侧粘贴文章内容，点击分析按钮即可开始</p>
+          <div class="placeholder-tags">
+            <span>知乎回答</span>
+            <span>公众号文章</span>
+            <span>博客</span>
+            <span>任意中文文本</span>
+          </div>
         </div>
-
-        <section class="panel panel-right">
-          <div v-if="analysisStore.status === 'idle'" class="placeholder">
-            <div class="placeholder-art">
-              <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-                <rect x="14" y="10" width="52" height="60" rx="4" fill="currentColor" opacity="0.06"/>
-                <rect x="22" y="20" width="36" height="4" rx="2" fill="currentColor" opacity="0.15"/>
-                <rect x="22" y="30" width="28" height="3" rx="1.5" fill="currentColor" opacity="0.1"/>
-                <rect x="22" y="38" width="32" height="3" rx="1.5" fill="currentColor" opacity="0.1"/>
-                <rect x="22" y="46" width="24" height="3" rx="1.5" fill="currentColor" opacity="0.1"/>
-                <circle cx="60" cy="60" r="14" fill="var(--accent)" opacity="0.12"/>
-                <path d="M56 57l3-3 6 6" stroke="var(--accent)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
-              </svg>
-            </div>
-            <p class="placeholder-title">准备就绪</p>
-            <p class="placeholder-desc">在左侧粘贴文章内容，点击分析按钮即可开始</p>
-            <div class="placeholder-tags">
-              <span>知乎回答</span>
-              <span>公众号文章</span>
-              <span>博客</span>
-              <span>任意中文文本</span>
-            </div>
+        <div v-else-if="analysisStore.error" class="error-box">
+          <div class="error-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
           </div>
-          <div v-else-if="analysisStore.error" class="error-box">
-            <div class="error-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-            </div>
-            <h3>分析出错</h3>
-            <pre>{{ analysisStore.error }}</pre>
-          </div>
-          <ReportView v-else />
-        </section>
-      </template>
+          <h3>分析出错</h3>
+          <pre>{{ analysisStore.error }}</pre>
+        </div>
+        <ReportView v-else />
+      </section>
     </main>
+
+    <ToastMessage />
   </div>
 </template>
 
@@ -288,6 +291,7 @@ body {
   overflow: hidden;
   padding: 16px;
   gap: 16px;
+  position: relative;
 }
 
 .panel {
@@ -409,5 +413,33 @@ body {
   font-size: 13px;
   color: var(--text-secondary);
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* ── Settings overlay ── */
+.settings-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  overflow-y: auto;
+  background: rgba(248, 247, 244, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: var(--radius-lg);
+}
+
+/* ── Settings transition ── */
+.settings-slide-enter-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.settings-slide-leave-active {
+  transition: all 0.2s ease-in;
+}
+.settings-slide-enter-from {
+  opacity: 0;
+  transform: translateY(16px);
+}
+.settings-slide-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 </style>

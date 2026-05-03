@@ -1,7 +1,21 @@
+const fetch = require('node-fetch')
+
+// ── Structured errors ──
+
+class APIError extends Error {
+  constructor(message, code, status, raw) {
+    super(message)
+    this.name = 'APIError'
+    this.code = code      // 'auth' | 'rate_limit' | 'server' | 'network' | 'parse'
+    this.status = status  // HTTP status if applicable
+    this.raw = raw        // original response text
+  }
+}
+
 /**
  * Unified API call layer — OpenAI-compatible chat completions format.
+ * Returns the model's text response, or throws an APIError.
  */
-
 async function callAPI(systemPrompt, userMessage, config) {
   const url = `${config.api_base}${config.endpoint}`
   const body = {
@@ -14,32 +28,79 @@ async function callAPI(systemPrompt, userMessage, config) {
     temperature: config.temperature ?? 0.3
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.api_key}`
-    },
-    body: JSON.stringify(body)
-  })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`API error ${response.status}: ${text}`)
+  let response
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.api_key}`
+      },
+      body: JSON.stringify(body)
+    })
+  } catch (err) {
+    throw new APIError(
+      `网络连接失败：无法访问 ${config.api_base}。请检查网络或 API 地址。`,
+      'network', null, err.message
+    )
   }
 
-  const data = await response.json()
-  return data.choices[0].message.content
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    const status = response.status
+
+    if (status === 401 || status === 403) {
+      throw new APIError(
+        '认证失败：API Key 无效或没有权限。请在设置中检查 Key 是否正确。',
+        'auth', status, text
+      )
+    }
+    if (status === 429) {
+      throw new APIError(
+        '请求过于频繁，API 限流。请稍等片刻再试。',
+        'rate_limit', status, text
+      )
+    }
+    if (status >= 500) {
+      throw new APIError(
+        `API 服务器错误 (${status})，可能是服务商暂时故障。请稍后重试。`,
+        'server', status, text
+      )
+    }
+    throw new APIError(
+      `API 返回错误 (${status})`,
+      'api', status, text
+    )
+  }
+
+  let data
+  try {
+    data = await response.json()
+  } catch (err) {
+    throw new APIError(
+      '无法解析 API 返回的响应，可能返回了非 JSON 内容。',
+      'parse', null, err.message
+    )
+  }
+
+  const content = data.choices?.[0]?.message?.content
+  if (!content && content !== '') {
+    throw new APIError(
+      'API 返回了空响应，可能是模型不支持或参数有误。',
+      'parse', null, JSON.stringify(data).slice(0, 500)
+    )
+  }
+
+  return content
 }
 
 /**
  * Parse a JSON block from model output — handles markdown code fences.
  */
 function parseJSON(content) {
-  // Try to extract from ```json ... ``` block
   const fenceMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/)
   const jsonStr = fenceMatch ? fenceMatch[1].trim() : content.trim()
   return JSON.parse(jsonStr)
 }
 
-module.exports = { callAPI, parseJSON }
+module.exports = { callAPI, parseJSON, APIError }

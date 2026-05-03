@@ -19,6 +19,13 @@ function handleClear() {
   text.value = ''
   analysisStore.reset()
 }
+
+const modeLabel = computed(() => {
+  if (analysisStore.outputMode === 'annotate') {
+    return analysisStore.mode === 'deep' ? '开始标注（深度）' : '开始标注（快速）'
+  }
+  return analysisStore.mode === 'deep' ? '开始分析（深度）' : '开始分析（快速）'
+})
 </script>
 
 <template>
@@ -35,31 +42,56 @@ function handleClear() {
         <span class="word-badge" :class="{ 'has-content': wordCount > 0 }">
           {{ wordCount.toLocaleString() }} 字
         </span>
-        <div class="mode-switch">
+      </div>
+    </div>
+
+    <!-- Mode Selector -->
+    <div class="mode-selector">
+      <div class="mode-row">
+        <button
+          class="mode-card"
+          :class="{ active: analysisStore.outputMode === 'report' }"
+          :disabled="analysisStore.isRunning"
+          @click="analysisStore.outputMode = 'report'"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          <div class="mode-card-text">
+            <span class="mode-card-title">分析报告</span>
+            <span class="mode-card-desc">结构化报告</span>
+          </div>
+        </button>
+        <button
+          class="mode-card"
+          :class="{ active: analysisStore.outputMode === 'annotate' }"
+          :disabled="analysisStore.isRunning"
+          @click="analysisStore.outputMode = 'annotate'"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+          <div class="mode-card-text">
+            <span class="mode-card-title">原文标注</span>
+            <span class="mode-card-desc">三色高亮标记</span>
+          </div>
+        </button>
+      </div>
+      <div class="depth-row">
+        <span class="depth-label">{{ analysisStore.outputMode === 'report' ? '分析深度' : '标注深度' }}</span>
+        <div class="depth-switch">
           <button
-            class="mode-btn"
+            class="depth-btn"
             :class="{ active: analysisStore.mode === 'deep' }"
             :disabled="analysisStore.isRunning"
             @click="analysisStore.mode = 'deep'"
-            title="结构提取 + 问题标记 + 完整报告"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/>
-            </svg>
-            深度
-          </button>
+          >深度</button>
           <button
-            class="mode-btn"
+            class="depth-btn"
             :class="{ active: analysisStore.mode === 'quick' }"
             :disabled="analysisStore.isRunning"
             @click="analysisStore.mode = 'quick'"
-            title="跳过中间步骤，直接生成报告"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-            </svg>
-            快速
-          </button>
+          >快速</button>
         </div>
       </div>
     </div>
@@ -85,7 +117,7 @@ function handleClear() {
           <polygon points="5 3 19 12 5 21 5 3"/>
         </svg>
         <span class="spinner" v-else></span>
-        {{ analysisStore.isRunning ? '分析中...' : '开始分析' }}
+        {{ analysisStore.isRunning ? '处理中...' : modeLabel }}
       </button>
       <button
         class="btn-clear"
@@ -146,57 +178,123 @@ function handleClear() {
   color: var(--accent);
 }
 
-/* ── Mode Switch ── */
-.mode-switch {
+/* ── Mode Selector ── */
+.mode-selector {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mode-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mode-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 2px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: inherit;
+  text-align: left;
+  color: var(--text-muted);
+}
+
+.mode-card svg {
+  flex-shrink: 0;
+  opacity: 0.4;
+  transition: opacity var(--transition);
+}
+
+.mode-card.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.mode-card.active svg {
+  opacity: 1;
+}
+
+.mode-card:hover:not(.active):not(:disabled) {
+  border-color: var(--border);
+  background: var(--bg);
+}
+
+.mode-card:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mode-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.mode-card-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mode-card-desc {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+/* ── Depth Row ── */
+.depth-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.depth-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.depth-switch {
   display: flex;
   background: var(--bg);
-  border-radius: 14px;
+  border-radius: 12px;
   padding: 2px;
   border: 1px solid var(--border-light);
 }
 
-.mode-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+.depth-btn {
+  padding: 3px 12px;
   border: none;
-  border-radius: 12px;
-  font-size: 12px;
+  border-radius: 10px;
+  font-size: 11px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   background: transparent;
   color: var(--text-muted);
   transition: all var(--transition);
-  white-space: nowrap;
 }
 
-.mode-btn svg {
-  flex-shrink: 0;
-  opacity: 0.5;
-  transition: opacity var(--transition);
-}
-
-.mode-btn.active {
+.depth-btn.active {
   background: var(--bg-card);
-  color: var(--accent);
+  color: var(--text);
   box-shadow: var(--shadow-sm);
 }
 
-.mode-btn.active svg {
-  opacity: 1;
-}
-
-.mode-btn:hover:not(.active):not(:disabled) {
+.depth-btn:hover:not(.active):not(:disabled) {
   color: var(--text-secondary);
 }
 
-.mode-btn:hover:not(.active):not(:disabled) svg {
-  opacity: 0.7;
-}
-
-.mode-btn:disabled {
+.depth-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
