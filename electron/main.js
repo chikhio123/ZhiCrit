@@ -13,25 +13,66 @@ function getConfigPath() {
   return path.join(app.getPath('userData'), 'config.json')
 }
 
+const profileDefaults = {
+  api_base: 'https://api.deepseek.com',
+  api_key: '',
+  model: 'deepseek-chat',
+  endpoint: '/v1/chat/completions',
+  max_tokens: 4096,
+  temperature: 0.3
+}
+
 function loadConfig() {
   const configPath = getConfigPath()
-  const defaults = {
-    api_base: 'https://api.deepseek.com',
-    api_key: '',
-    model: 'deepseek-chat',
-    endpoint: '/v1/chat/completions',
-    max_tokens: 4096,
-    temperature: 0.3
+  const defaultConfig = {
+    profiles: [{ name: '默认', ...profileDefaults }],
+    activeProfile: '默认'
   }
   try {
     if (fs.existsSync(configPath)) {
       const data = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-      return { ...defaults, ...data }
+
+      // Migrate old flat format to profiles structure
+      if (!data.profiles && data.api_base !== undefined) {
+        const migrated = {
+          profiles: [{
+            name: '默认',
+            api_base: data.api_base ?? profileDefaults.api_base,
+            api_key: data.api_key ?? profileDefaults.api_key,
+            model: data.model ?? profileDefaults.model,
+            endpoint: data.endpoint ?? profileDefaults.endpoint,
+            max_tokens: data.max_tokens ?? profileDefaults.max_tokens,
+            temperature: data.temperature ?? profileDefaults.temperature
+          }],
+          activeProfile: '默认'
+        }
+        fs.writeFileSync(configPath, JSON.stringify(migrated, null, 2), 'utf-8')
+        return migrated
+      }
+
+      if (data.profiles) {
+        return data
+      }
     }
   } catch (e) {
     console.error('Failed to load config:', e)
   }
-  return defaults
+  return defaultConfig
+}
+
+function getActiveConfig(fullConfig) {
+  const profiles = fullConfig.profiles || []
+  const name = fullConfig.activeProfile
+  const profile = profiles.find(p => p.name === name) || profiles[0]
+  if (!profile) return { ...profileDefaults }
+  return {
+    api_base: profile.api_base ?? profileDefaults.api_base,
+    api_key: profile.api_key ?? profileDefaults.api_key,
+    model: profile.model ?? profileDefaults.model,
+    endpoint: profile.endpoint ?? profileDefaults.endpoint,
+    max_tokens: profile.max_tokens ?? profileDefaults.max_tokens,
+    temperature: profile.temperature ?? profileDefaults.temperature
+  }
 }
 
 function saveConfig(config) {
@@ -84,6 +125,16 @@ function createWindow() {
 
 // ---- IPC Handlers ----
 
+ipcMain.handle('dialog:message', async (_event, options) => {
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: options.type || 'info',
+    title: options.title || '知友',
+    message: options.message,
+    buttons: ['确定']
+  })
+  return result
+})
+
 ipcMain.handle('config:get', () => {
   return loadConfig()
 })
@@ -107,7 +158,7 @@ ipcMain.handle('report:save', async (_event, markdown) => {
 })
 
 ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', outputMode = 'report') => {
-  const config = loadConfig()
+  const config = getActiveConfig(loadConfig())
 
   if (!config.api_key) {
     return { error: '请先在设置中配置 API Key' }
@@ -133,13 +184,14 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', output
     const triageResult = await triage(articleText, config, (p) => loadPrompt(p))
     send({ step: 'triage', status: 'done', result: triageResult })
 
-    if (triageResult.level === 'skip') {
+    // Skip gate only applies when user didn't explicitly choose deep
+    if (triageResult.level === 'skip' && mode !== 'deep') {
       finalResult = { level: 'skip', report: triageResult.report || triageResult.verdict }
       send({ step: 'done', result: finalResult })
       return { success: true, ...finalResult }
     }
 
-    // User-selected mode overrides triage level (except skip)
+    // User-selected mode overrides triage level
     const isAnnotate = outputMode === 'annotate'
     const isQuick = triageResult.level !== 'skip' && mode === 'quick'
     let extractResult = null
@@ -165,11 +217,11 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', output
     let reportText = null
     let annotateResult = null
 
-    if (isAnnotate) {
-      // 标注模式：skip report, annotate is the main output
+    // Report: skipped only in quick annotate mode; deep always runs both
+    // so switching report ↔ annotate is instant.
+    if (isAnnotate && isQuick) {
       send({ step: 'report', status: 'done', result: { skipped: true } })
     } else {
-      // 分析模式：generate report first, then annotate as supplement
       send({ step: 'report', status: 'running' })
       reportText = await report(
         articleText, triageResult, extractResult, detectResult, config, (p) => loadPrompt(p)
@@ -177,12 +229,15 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', output
       send({ step: 'report', status: 'done', result: { markdown: reportText } })
     }
 
-    // Annotate: in annotation mode it's the main output; in report mode it
-    // still runs so switching modes later is instant (cache hit).
-    send({ step: 'annotate', status: 'running' })
-    annotateResult = await annotate(
-      articleText, triageResult, extractResult, detectResult, config, (p) => loadPrompt(p)
-    )
+    // Annotate: skipped only in quick report mode
+    if (!isAnnotate && isQuick) {
+      send({ step: 'annotate', status: 'done', result: { skipped: true } })
+    } else {
+      send({ step: 'annotate', status: 'running' })
+      annotateResult = await annotate(
+        articleText, triageResult, extractResult, detectResult, config, (p) => loadPrompt(p)
+      )
+    }
     send({ step: 'annotate', status: 'done', result: annotateResult })
 
     finalResult = {

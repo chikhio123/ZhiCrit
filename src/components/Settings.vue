@@ -1,59 +1,226 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { useConfigStore } from '../stores/config.js'
 
 const configStore = useConfigStore()
-const saved = ref(false)
+const selectedName = ref('')
+const dropdownOpen = ref(false)
+const dropdownRef = ref(null)
 
-const form = ref({
-  api_base: '',
-  api_key: '',
-  model: '',
-  endpoint: '',
-  max_tokens: 4096,
-  temperature: 0.3
+function closeDropdown(e) {
+  if (dropdownRef.value && !dropdownRef.value.contains(e.target)) {
+    dropdownOpen.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', closeDropdown)
+  document.addEventListener('click', closeEndpointDropdown)
+  document.addEventListener('click', closeModelDropdown)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', closeDropdown)
+  document.removeEventListener('click', closeEndpointDropdown)
+  document.removeEventListener('click', closeModelDropdown)
 })
 
-watch(() => configStore.loaded, (loaded) => {
-  if (loaded) {
-    form.value.api_base = configStore.api_base
-    form.value.api_key = configStore.api_key
-    form.value.model = configStore.model
-    form.value.endpoint = configStore.endpoint
-    form.value.max_tokens = configStore.max_tokens
-    form.value.temperature = configStore.temperature
+const profileDefaults = {
+  name: '',
+  api_base: 'https://api.deepseek.com',
+  api_key: '',
+  model: 'deepseek-chat',
+  endpoint: '/v1/chat/completions',
+  max_tokens: 4096,
+  temperature: 0.3
+}
+
+const form = ref({ ...profileDefaults })
+
+const profileNames = computed(() => configStore.profiles.map(p => p.name))
+const canDelete = computed(() => configStore.profiles.length > 1)
+
+// Model fetcher
+const fetchingModels = ref(false)
+const fetchedModels = ref([])
+const modelDropdownOpen = ref(false)
+const modelDropdownRef = ref(null)
+
+async function fetchModels() {
+  if (!form.value.api_base) {
+    window.__toast?.warning('请先填写 API Base URL～')
+    return
   }
-}, { immediate: true })
+  fetchingModels.value = true
+  fetchedModels.value = []
+  try {
+    const base = form.value.api_base.replace(/\/+$/, '')
+    const res = await fetch(`${base}/v1/models`, {
+      headers: {
+        'Authorization': `Bearer ${form.value.api_key || ''}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`${res.status}: ${text.slice(0, 200)}`)
+    }
+    const data = await res.json()
+    fetchedModels.value = (data.data || [])
+      .map(m => m.id)
+      .sort()
+    if (!fetchedModels.value.length) {
+      window.__toast?.info('未找到可用模型')
+    } else {
+      window.__toast?.success(`拉取到 ${fetchedModels.value.length} 个模型～`)
+      // 当前模型名不在列表中则清空
+      if (!fetchedModels.value.includes(form.value.model)) {
+        form.value.model = ''
+      }
+    }
+  } catch (err) {
+    window.__toast?.error(`拉取失败：${err.message}`)
+  } finally {
+    fetchingModels.value = false
+  }
+}
+
+function selectModel(id) {
+  form.value.model = id
+  modelDropdownOpen.value = false
+}
+
+function closeModelDropdown(e) {
+  if (modelDropdownRef.value && !modelDropdownRef.value.contains(e.target)) {
+    modelDropdownOpen.value = false
+  }
+}
+
+const endpointPresets = [
+  { value: '/v1/chat/completions', label: 'OpenAI Chat Completions' },
+  { value: '/v1/responses',       label: 'OpenAI Responses（新格式）' },
+  { value: '/v1/messages',        label: 'Anthropic Messages（Claude）' }
+]
+const endpointDropdownOpen = ref(false)
+const endpointDropdownRef = ref(null)
+const customEndpoint = ref('')
+
+const endpointLabel = computed(() => {
+  const preset = endpointPresets.find(p => p.value === form.value.endpoint)
+  return preset ? preset.label : form.value.endpoint
+})
+
+const fullURL = computed(() => {
+  const base = (form.value.api_base || '').replace(/\/+$/, '')
+  const ep = form.value.endpoint || ''
+  return base + ep
+})
+
+function selectEndpoint(ep) {
+  form.value.endpoint = ep.value
+  customEndpoint.value = ''
+  endpointDropdownOpen.value = false
+}
+
+function closeEndpointDropdown(e) {
+  if (endpointDropdownRef.value && !endpointDropdownRef.value.contains(e.target)) {
+    endpointDropdownOpen.value = false
+  }
+}
+
+function handleCustomEndpoint() {
+  if (customEndpoint.value.trim()) {
+    form.value.endpoint = customEndpoint.value.trim()
+    customEndpoint.value = ''
+    endpointDropdownOpen.value = false
+  }
+}
+
+function uniqueName(base) {
+  let name = base
+  let n = 2
+  while (configStore.profiles.some(p => p.name === name)) {
+    name = `${base} ${n}`
+    n++
+  }
+  return name
+}
+
+function selectProfile(name) {
+  selectedName.value = name
+  const p = configStore.profiles.find(p => p.name === name)
+  if (p) {
+    form.value = {
+      name: p.name,
+      api_base: p.api_base,
+      api_key: p.api_key,
+      model: p.model,
+      endpoint: p.endpoint,
+      max_tokens: p.max_tokens,
+      temperature: p.temperature
+    }
+  }
+}
+
+function syncToActiveProfile() {
+  if (configStore.loaded && configStore.activeProfile) {
+    selectProfile(configStore.activeProfile)
+  }
+}
+
+// 每次打开设置页，定位到当前使用的 API profile
+syncToActiveProfile()
+watch(() => configStore.loaded, (loaded) => {
+  if (loaded) selectProfile(configStore.activeProfile || configStore.profiles[0]?.name)
+})
 
 async function handleSave() {
-  configStore.api_base = form.value.api_base
-  configStore.api_key = form.value.api_key
-  configStore.model = form.value.model
-  configStore.endpoint = form.value.endpoint
-  configStore.max_tokens = Number(form.value.max_tokens)
-  configStore.temperature = Number(form.value.temperature)
-  await configStore.save()
-  saved.value = true
-  window.__toast?.success('配置已保存～')
-  setTimeout(() => { saved.value = false }, 2000)
-}
+  if (!form.value.name.trim()) {
+    window.__toast?.warning('请输入配置名称～')
+    return
+  }
+  const oldName = selectedName.value
+  const newName = form.value.name.trim()
 
-function preset(name) {
-  saved.value = false
-  if (name === 'deepseek') {
-    form.value.api_base = 'https://api.deepseek.com'
-    form.value.model = 'deepseek-chat'
-    form.value.endpoint = '/v1/chat/completions'
-  } else if (name === 'openai') {
-    form.value.api_base = 'https://api.openai.com'
-    form.value.model = 'gpt-4o'
-    form.value.endpoint = '/v1/chat/completions'
-  } else if (name === 'ollama') {
-    form.value.api_base = 'http://localhost:11434'
-    form.value.model = 'llama3'
-    form.value.endpoint = '/v1/chat/completions'
+  try {
+    if (oldName !== newName) {
+      const collides = configStore.profiles.some(p => p.name === newName)
+      if (collides) {
+        configStore.deleteProfile(oldName)
+        configStore.upsertProfile({ ...form.value, name: newName })
+      } else {
+        configStore.renameProfile(oldName, newName)
+        configStore.upsertProfile({ ...form.value, name: newName })
+      }
+    } else {
+      configStore.upsertProfile({ ...form.value, name: newName })
+    }
+    await configStore.save()
+    selectedName.value = newName
+    window.__toast?.success('配置已保存～')
+  } catch (err) {
+    window.__toast?.error(`保存失败：${err.message}`)
+    console.error('Save error:', err)
   }
 }
+
+async function handleAdd() {
+  const name = uniqueName('新配置')
+  const p = { ...profileDefaults, name }
+  configStore.addProfile(p)
+  await configStore.save()
+  selectProfile(name)
+  window.__toast?.success(`已添加「${name}」～`)
+}
+
+async function handleDelete() {
+  if (!canDelete.value) return
+  const name = selectedName.value
+  configStore.deleteProfile(name)
+  await configStore.save()
+  selectProfile(configStore.activeProfile)
+  window.__toast?.info('配置已删除')
+}
+
 </script>
 
 <template>
@@ -61,18 +228,90 @@ function preset(name) {
     <div class="settings-card">
       <div class="settings-header">
         <h2>API 配置</h2>
-        <p>支持任意 OpenAI 兼容接口 — DeepSeek、OpenAI、Ollama 等</p>
+        <p>支持任意 OpenAI 兼容接口 — 可保存多套配置随时切换</p>
+      </div>
+
+      <!-- Profile selector -->
+      <div class="profile-bar">
+        <div class="profile-dropdown" ref="dropdownRef">
+          <button class="profile-dropdown-trigger" @click="dropdownOpen = !dropdownOpen">
+            <span class="trigger-label">{{ selectedName }}</span>
+            <svg class="trigger-chevron" :class="{ open: dropdownOpen }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <Transition name="dropdown-slide">
+            <div v-if="dropdownOpen" class="profile-dropdown-menu">
+              <button
+                v-for="name in profileNames"
+                :key="name"
+                class="profile-dropdown-item"
+                :class="{ active: name === selectedName }"
+                @click="configStore.setActiveProfile(name); selectProfile(name); dropdownOpen = false"
+              >
+                <svg v-if="name === selectedName" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <span v-else class="check-placeholder"></span>
+                {{ name }}
+              </button>
+            </div>
+          </Transition>
+        </div>
+        <div class="profile-bar-actions">
+          <button class="profile-action-btn" title="新建配置" @click="handleAdd">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <button class="profile-action-btn danger" title="删除当前配置" :disabled="!canDelete" @click="handleDelete">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
       </div>
 
       <div class="form-grid">
         <div class="form-group span-2">
+          <label>配置名称</label>
+          <input v-model="form.name" type="text" placeholder="例如：DeepSeek、公司 OpenAI" />
+        </div>
+
+        <div class="form-group span-2">
           <label>API Base URL</label>
           <input v-model="form.api_base" type="text" placeholder="https://api.deepseek.com" />
+          <span class="url-hint" v-if="fullURL">{{ fullURL }}</span>
         </div>
 
         <div class="form-group span-2">
           <label>Endpoint</label>
-          <input v-model="form.endpoint" type="text" placeholder="/v1/chat/completions" />
+          <div class="profile-dropdown" ref="endpointDropdownRef">
+            <button class="profile-dropdown-trigger" @click="endpointDropdownOpen = !endpointDropdownOpen">
+              <span class="trigger-label">{{ endpointLabel || '选择 endpoint...' }}</span>
+              <svg class="trigger-chevron" :class="{ open: endpointDropdownOpen }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <Transition name="dropdown-slide">
+              <div v-if="endpointDropdownOpen" class="profile-dropdown-menu">
+                <button
+                  v-for="ep in endpointPresets"
+                  :key="ep.value"
+                  class="profile-dropdown-item"
+                  :class="{ active: ep.value === form.endpoint }"
+                  @click="selectEndpoint(ep)"
+                >
+                  <svg v-if="ep.value === form.endpoint" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span v-else class="check-placeholder"></span>
+                  <div class="endpoint-item">
+                    <span class="endpoint-label">{{ ep.label }}</span>
+                    <span class="endpoint-value">{{ ep.value }}</span>
+                  </div>
+                </button>
+                <div class="dropdown-custom-row">
+                  <input
+                    v-model="customEndpoint"
+                    class="dropdown-custom-input"
+                    placeholder="自定义 endpoint..."
+                    @keydown.enter="handleCustomEndpoint"
+                    @click.stop
+                  />
+                  <button class="dropdown-custom-btn" @click="handleCustomEndpoint">确定</button>
+                </div>
+              </div>
+            </Transition>
+          </div>
         </div>
 
         <div class="form-group span-2">
@@ -83,9 +322,39 @@ function preset(name) {
           </div>
         </div>
 
-        <div class="form-group">
+        <div class="form-group span-2">
           <label>Model</label>
-          <input v-model="form.model" type="text" placeholder="deepseek-chat" />
+          <div class="model-row">
+            <div class="profile-dropdown model-dropdown" ref="modelDropdownRef">
+              <input
+                v-model="form.model"
+                type="text"
+                placeholder="deepseek-chat"
+                class="model-input"
+                @focus="modelDropdownOpen = fetchedModels.length > 0"
+              />
+              <Transition name="dropdown-slide">
+                <div v-if="modelDropdownOpen && fetchedModels.length" class="profile-dropdown-menu model-menu">
+                  <button
+                    v-for="m in fetchedModels"
+                    :key="m"
+                    class="profile-dropdown-item"
+                    :class="{ active: m === form.model }"
+                    @click="selectModel(m)"
+                  >{{ m }}</button>
+                </div>
+              </Transition>
+            </div>
+            <button class="fetch-btn" :disabled="fetchingModels" @click="fetchModels">
+              <svg v-if="fetchingModels" class="spinning" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+              拉取
+            </button>
+          </div>
         </div>
 
         <div class="form-group">
@@ -107,41 +376,10 @@ function preset(name) {
       </div>
 
       <div class="settings-actions">
-        <button class="save-btn" @click="handleSave">
-          <svg v-if="saved" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-          {{ saved ? '已保存' : '保存配置' }}
-        </button>
+        <button class="save-btn" @click="handleSave">保存配置</button>
       </div>
     </div>
 
-    <div class="settings-card">
-      <h3>快速预设</h3>
-      <div class="preset-grid">
-        <button class="preset-card" @click="preset('deepseek')">
-          <div class="preset-icon deepseek">DS</div>
-          <div class="preset-info">
-            <span class="preset-name">DeepSeek</span>
-            <span class="preset-model">deepseek-chat</span>
-          </div>
-        </button>
-        <button class="preset-card" @click="preset('openai')">
-          <div class="preset-icon openai">OA</div>
-          <div class="preset-info">
-            <span class="preset-name">OpenAI</span>
-            <span class="preset-model">gpt-4o</span>
-          </div>
-        </button>
-        <button class="preset-card" @click="preset('ollama')">
-          <div class="preset-icon ollama">OL</div>
-          <div class="preset-info">
-            <span class="preset-name">Ollama</span>
-            <span class="preset-model">本地模型</span>
-          </div>
-        </button>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -164,7 +402,7 @@ function preset(name) {
 }
 
 .settings-header {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .settings-header h2 {
@@ -179,12 +417,296 @@ function preset(name) {
   color: var(--text-muted);
 }
 
-.settings-card h3 {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 14px;
+/* ── Profile bar ── */
+.profile-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-light);
 }
 
+.profile-dropdown {
+  flex: 1;
+  position: relative;
+}
+
+.profile-dropdown-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.profile-dropdown-trigger:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.trigger-label {
+  flex: 1;
+  text-align: left;
+}
+
+.trigger-chevron {
+  color: var(--text-muted);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.trigger-chevron.open {
+  transform: rotate(180deg);
+}
+
+.profile-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  z-index: 30;
+  overflow: hidden;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.profile-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--transition);
+  text-align: left;
+}
+
+.profile-dropdown-item:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.profile-dropdown-item.active {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.check-placeholder {
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.endpoint-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.endpoint-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.endpoint-value {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* Dropdown transition */
+.model-row {
+  display: flex;
+  gap: 8px;
+}
+
+.model-dropdown {
+  flex: 1;
+}
+
+.model-input {
+  width: 100%;
+  padding: 9px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--bg-card);
+  color: var(--text);
+  transition: all var(--transition);
+}
+
+.model-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.model-menu {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.fetch-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.fetch-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.fetch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1.5s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.dropdown-slide-enter-active {
+  transition: all 0.15s ease-out;
+}
+.dropdown-slide-leave-active {
+  transition: all 0.1s ease-in;
+}
+.dropdown-slide-enter-from {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.dropdown-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.dropdown-custom-row {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border-light);
+}
+
+.dropdown-custom-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--bg);
+  color: var(--text);
+  min-width: 0;
+}
+
+.dropdown-custom-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.dropdown-custom-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.url-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  margin-top: 4px;
+}
+
+.profile-bar-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.profile-action-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.profile-action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.profile-action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.profile-action-btn:disabled:hover {
+  border-color: var(--border);
+  color: var(--text-secondary);
+  background: var(--bg);
+}
+
+.profile-action-btn.danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* ── Form ── */
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -301,62 +823,4 @@ function preset(name) {
   transform: translateY(-1px);
 }
 
-.preset-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-
-.preset-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius);
-  background: var(--bg-card);
-  cursor: pointer;
-  transition: all var(--transition);
-  font-family: inherit;
-  text-align: left;
-}
-
-.preset-card:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  box-shadow: var(--shadow-sm);
-}
-
-.preset-icon {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: 800;
-  color: white;
-  flex-shrink: 0;
-}
-
-.preset-icon.deepseek { background: linear-gradient(135deg, #005eb8, #0084ff); }
-.preset-icon.openai { background: linear-gradient(135deg, #10a37f, #34d399); }
-.preset-icon.ollama { background: linear-gradient(135deg, #374151, #6b7280); }
-
-.preset-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.preset-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.preset-model {
-  font-size: 11px;
-  color: var(--text-muted);
-}
 </style>

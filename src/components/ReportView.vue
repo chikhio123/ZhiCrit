@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useAnalysisStore } from '../stores/analysis.js'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 
@@ -15,7 +16,7 @@ marked.setOptions({ breaks: true, gfm: true })
 const renderedHTML = computed(() => {
   const md = analysisStore.report
   if (!md) return ''
-  return marked.parse(md, {
+  const raw = marked.parse(md, {
     highlight: (code, lang) => {
       if (lang && hljs.getLanguage(lang)) {
         return hljs.highlight(code, { language: lang }).value
@@ -23,6 +24,7 @@ const renderedHTML = computed(() => {
       return hljs.highlightAuto(code).value
     }
   })
+  return DOMPurify.sanitize(raw)
 })
 
 const levelLabel = computed(() => {

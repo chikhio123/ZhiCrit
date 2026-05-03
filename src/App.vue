@@ -78,7 +78,9 @@ configStore.load()
 
     <main class="app-main">
       <Transition name="settings-slide">
-        <Settings v-if="showSettings" class="settings-overlay" />
+        <div v-if="showSettings" class="settings-overlay">
+          <Settings />
+        </div>
       </Transition>
 
       <aside class="panel panel-left" :style="{ width: leftWidth + 'px' }">
@@ -421,9 +423,9 @@ body {
   inset: 0;
   z-index: 20;
   overflow-y: auto;
-  background: rgba(248, 247, 244, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(248, 247, 244, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-radius: var(--radius-lg);
 }
 

@@ -6,9 +6,8 @@ export const useAnalysisStore = defineStore('analysis', {
     mode: 'deep',       // 'deep' | 'quick' — analysis depth
     outputMode: 'report', // 'report' | 'annotate' — output format
     articleText: '',
-    articleWordCount: 0,
-    lastAnalyzedText: '', // cache key — skip re-run if same article
-
+    lastAnalyzedText: '',
+    lastMode: null,
     // Step states: idle | running | done | error
     steps: {
       triage: { status: 'idle', result: null, error: null },
@@ -58,28 +57,26 @@ export const useAnalysisStore = defineStore('analysis', {
       }
     },
 
-    setArticle(text) {
-      this.articleText = text
-      this.articleWordCount = text.length
-    },
-
     async startAnalysis() {
       if (!this.articleText.trim()) return
 
-      // Cache hit: same article, already analyzed, requested output is available
-      const sameArticle = this.articleText === this.lastAnalyzedText
-      if (sameArticle && this.status === 'done') {
+      // Cache: same article + same depth → instant mode switch
+      const sameRequest = this.articleText === this.lastAnalyzedText && this.mode === this.lastMode
+      if (sameRequest && this.status === 'done') {
         if (this.outputMode === 'annotate' && this.annotations.length) {
-          return // 标注模式：直接用已有标注
+          window.__toast?.success('已切换至标注模式～')
+          return
         }
         if (this.outputMode === 'report' && this.report) {
-          return // 分析模式：直接用已有报告
+          window.__toast?.success('已切换至分析模式～')
+          return
         }
       }
 
       this.reset()
       this.status = 'running'
       this.lastAnalyzedText = this.articleText
+      this.lastMode = this.mode
 
       const cleanup = window.zhicrit.onProgress((payload) => {
         this.handleProgress(payload)
@@ -140,16 +137,6 @@ export const useAnalysisStore = defineStore('analysis', {
         this.steps[step].status = status
         if (result) {
           this.steps[step].result = result
-        }
-      }
-
-      // If triage returns skip, mark remaining steps as done
-      if (step === 'triage' && status === 'done' && result) {
-        if (result.level === 'skip') {
-          this.steps.extract.status = 'done'
-          this.steps.detect.status = 'done'
-          this.steps.report.status = 'done'
-          this.steps.annotate.status = 'done'
         }
       }
     }

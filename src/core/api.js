@@ -28,6 +28,10 @@ async function callAPI(systemPrompt, userMessage, config) {
     temperature: config.temperature ?? 0.3
   }
 
+  const controller = new AbortController()
+  const timeoutMs = config.timeout_ms || 120000
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
   let response
   try {
     response = await fetch(url, {
@@ -36,13 +40,22 @@ async function callAPI(systemPrompt, userMessage, config) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${config.api_key}`
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller.signal
     })
   } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new APIError(
+        `请求超时（${Math.round(timeoutMs / 1000)}s）：API 未在预期时间内响应。请检查网络或增加超时时间。`,
+        'timeout', null, null
+      )
+    }
     throw new APIError(
       `网络连接失败：无法访问 ${config.api_base}。请检查网络或 API 地址。`,
       'network', null, err.message
     )
+  } finally {
+    clearTimeout(timer)
   }
 
   if (!response.ok) {

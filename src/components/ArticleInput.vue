@@ -3,20 +3,18 @@ import { ref, computed } from 'vue'
 import { useAnalysisStore } from '../stores/analysis.js'
 
 const analysisStore = useAnalysisStore()
-const text = ref('')
 const isFocused = ref(false)
 
-const wordCount = computed(() => text.value.length)
-const canAnalyze = computed(() => text.value.trim().length > 0 && !analysisStore.isRunning)
+const wordCount = computed(() => analysisStore.articleText.length)
+const canAnalyze = computed(() => analysisStore.articleText.trim().length > 0 && !analysisStore.isRunning)
 
 function handleAnalyze() {
   if (!canAnalyze.value) return
-  analysisStore.setArticle(text.value)
   analysisStore.startAnalysis()
 }
 
 function handleClear() {
-  text.value = ''
+  analysisStore.articleText = ''
   analysisStore.reset()
 }
 
@@ -98,7 +96,7 @@ const modeLabel = computed(() => {
 
     <div class="textarea-wrapper" :class="{ focused: isFocused }">
       <textarea
-        v-model="text"
+        v-model="analysisStore.articleText"
         placeholder="在此粘贴要分析的文章..."
         :disabled="analysisStore.isRunning"
         @focus="isFocused = true"
