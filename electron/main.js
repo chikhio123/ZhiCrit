@@ -26,7 +26,8 @@ function loadConfig() {
   const configPath = getConfigPath()
   const defaultConfig = {
     profiles: [{ name: '默认', ...profileDefaults }],
-    activeProfile: '默认'
+    activeProfile: '默认',
+    streaming: false
   }
   try {
     if (fs.existsSync(configPath)) {
@@ -71,7 +72,8 @@ function getActiveConfig(fullConfig) {
     model: profile.model ?? profileDefaults.model,
     endpoint: profile.endpoint ?? profileDefaults.endpoint,
     max_tokens: profile.max_tokens ?? profileDefaults.max_tokens,
-    temperature: profile.temperature ?? profileDefaults.temperature
+    temperature: profile.temperature ?? profileDefaults.temperature,
+    streaming: fullConfig.streaming ?? false
   }
 }
 
@@ -94,6 +96,32 @@ function ensureOutputDir() {
   if (!fs.existsSync(outDir)) {
     fs.mkdirSync(outDir, { recursive: true })
   }
+}
+
+function getHistoryPath() {
+  ensureOutputDir()
+  return path.join(__dirname, '..', 'output', 'history.json')
+}
+
+function loadHistory() {
+  const p = getHistoryPath()
+  try {
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, 'utf-8'))
+    }
+  } catch (e) {
+    console.error('Failed to load history:', e)
+  }
+  return []
+}
+
+function saveHistory(list) {
+  fs.writeFileSync(getHistoryPath(), JSON.stringify(list, null, 2), 'utf-8')
+}
+
+function getReportPath(id) {
+  ensureOutputDir()
+  return path.join(__dirname, '..', 'output', `analysis-${id}.md`)
 }
 
 function loadPrompt(name) {
@@ -167,7 +195,7 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', output
   const { triage } = require('../src/core/triage')
   const { extract } = require('../src/core/extract')
   const { detect } = require('../src/core/detect')
-  const { report } = require('../src/core/report')
+  const { report, reportStream } = require('../src/core/report')
   const { annotate } = require('../src/core/annotate')
 
   const send = (payload) => {
@@ -240,9 +268,21 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', output
       send({ step: 'report', status: 'done', result: { skipped: true } })
     } else {
       send({ step: 'report', status: 'running' })
-      reportText = await report(
-        articleText, triageResult, extractResult, detectResult, config, (p) => loadPrompt(p)
-      )
+      if (config.streaming) {
+        reportText = ''
+        for await (const chunk of reportStream(
+          articleText, triageResult, extractResult, detectResult, config, (p) => loadPrompt(p)
+        )) {
+          reportText += chunk
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('analyze:chunk', { step: 'report', chunk })
+          }
+        }
+      } else {
+        reportText = await report(
+          articleText, triageResult, extractResult, detectResult, config, (p) => loadPrompt(p)
+        )
+      }
       send({ step: 'report', status: 'done', result: { markdown: reportText } })
     }
 
@@ -265,12 +305,80 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', output
     }
     send({ step: 'done', result: finalResult })
 
+    // Auto-save to history (skip if triage said skip)
+    if (finalResult.level !== 'skip') {
+      const now = new Date()
+      const id = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+      const wordCount = articleText.length
+      const preview = articleText.replace(/\s+/g, '').slice(0, 40)
+      const issueCount = detectResult?.issues?.length || 0
+
+      try {
+        // Annotate mode may not have reportText — provide a placeholder
+        const content = reportText || `# 标注模式分析\n\n该分析使用标注模式，未生成传统报告。\n\n标注数量：${annotateResult?.annotations?.length || 0}`
+        fs.writeFileSync(getReportPath(id), content, 'utf-8')
+
+        // Deduplicate: same article → overwrite old entry instead of adding a duplicate
+        const list = loadHistory()
+        const dupIdx = list.findIndex(e => e.articleText === articleText)
+        if (dupIdx !== -1) {
+          const oldId = list[dupIdx].id
+          const oldReport = getReportPath(oldId)
+          if (oldId !== id && fs.existsSync(oldReport)) {
+            fs.unlinkSync(oldReport)
+          }
+          list.splice(dupIdx, 1)
+        }
+        list.unshift({
+          id,
+          date: now.toISOString(),
+          preview,
+          wordCount,
+          level: finalResult.level,
+          issueCount,
+          outputMode: finalResult.outputMode,
+          articleText
+        })
+        saveHistory(list)
+      } catch (e) {
+        console.error('Failed to save history:', e)
+      }
+    }
+
     return { success: true, ...finalResult }
   } catch (err) {
     console.error('Analysis error:', err)
     send({ step: 'error', message: err.message })
     return { error: err.message }
   }
+})
+
+// ---- History IPC ----
+
+ipcMain.handle('history:list', () => {
+  return loadHistory()
+})
+
+ipcMain.handle('history:get', (_event, id) => {
+  const p = getReportPath(id)
+  if (fs.existsSync(p)) {
+    return fs.readFileSync(p, 'utf-8')
+  }
+  return null
+})
+
+ipcMain.handle('history:delete', (_event, id) => {
+  const list = loadHistory()
+  const idx = list.findIndex(e => e.id === id)
+  if (idx !== -1) {
+    list.splice(idx, 1)
+    saveHistory(list)
+  }
+  const rp = getReportPath(id)
+  if (fs.existsSync(rp)) {
+    fs.unlinkSync(rp)
+  }
+  return { success: true }
 })
 
 // ---- App Lifecycle ----

@@ -61,6 +61,13 @@ export const useAnalysisStore = defineStore('analysis', {
     async startAnalysis() {
       if (!this.articleText.trim()) return
 
+      // Prevent concurrent analyses — multiple runs would accumulate IPC listeners
+      // and cause state corruption
+      if (this.status === 'running') {
+        window.__toast?.info('分析正在进行中，请等待完成～')
+        return
+      }
+
       // Cache: same article + same depth → instant mode switch
       // Only when switching to a different output mode that already has results
       const sameRequest = this.articleText === this.lastAnalyzedText && this.mode === this.lastMode
@@ -83,7 +90,8 @@ export const useAnalysisStore = defineStore('analysis', {
         for (const key of ['triage', 'extract', 'detect']) {
           const r = this.steps[key].result
           if (this.steps[key].status === 'done' && r && !r.skipped) {
-            prevSteps[key] = r
+            // Deep-clone to strip Vue reactive proxies — IPC needs plain objects
+            prevSteps[key] = JSON.parse(JSON.stringify(r))
           }
         }
         // Pass existing report to annotate for richer context
@@ -99,6 +107,12 @@ export const useAnalysisStore = defineStore('analysis', {
 
       const cleanup = window.zhicrit.onProgress((payload) => {
         this.handleProgress(payload)
+      })
+
+      const cleanupChunk = window.zhicrit.onChunk(({ step, chunk }) => {
+        if (step === 'report') {
+          this.report = (this.report || '') + chunk
+        }
       })
 
       try {
@@ -130,8 +144,11 @@ export const useAnalysisStore = defineStore('analysis', {
         this.error = err.message
         window.__toast?.error(err.message || '分析失败')
       } finally {
-        // Delay cleanup to allow in-flight progress messages to arrive
-        setTimeout(() => cleanup(), 100)
+        // Delay cleanup to allow in-flight progress/stream messages to arrive
+        setTimeout(() => {
+          cleanup()
+          cleanupChunk()
+        }, 100)
       }
     },
 

@@ -29,7 +29,8 @@ const renderedHTML = computed(() => {
 
 const levelLabel = computed(() => {
   const map = { deep: '深度分析', quick: '快速分析', skip: '已跳过' }
-  return map[analysisStore.level] || ''
+  const level = analysisStore.level || analysisStore.steps.triage.result?.level
+  return map[level] || ''
 })
 
 // Build annotated segments from original text + annotations
@@ -59,6 +60,28 @@ const annotatedSegments = computed(() => {
   }
   return segments
 })
+
+// ── Intermediate results (shown during analysis before report is ready) ──
+const hasIntermediate = computed(() => {
+  const s = analysisStore.steps
+  return (s.triage.status === 'done' && s.triage.result && !s.triage.result.skipped)
+      || (s.extract.status === 'done' && s.extract.result && !s.extract.result.skipped)
+      || (s.detect.status === 'done' && s.detect.result && !s.detect.result.skipped)
+})
+
+const triageResult = computed(() => analysisStore.steps.triage.result)
+const extractResult = computed(() => analysisStore.steps.extract.result)
+const detectResult = computed(() => analysisStore.steps.detect.result)
+
+const issueTypeLabel = (type) => ({
+  domain_shift: '论证域滑移', circular: '循环论证', single_cause: '单因果归因',
+  strawman: '稻草人', false_attribution: '错误归因', survivorship: '幸存者偏差',
+  scope_overflow: '覆盖溢出', term_swap: '偷换概念', missing_argument: '论证缺失',
+  overstatement: '过度断言', weak_transition: '弱过渡', is_ought_gap: '实然-应然跳跃',
+  category_error: '范畴错误', contradiction: '自相矛盾'
+}[type] || type)
+
+const severityLabel = (s) => ({ critical: '严重', major: '主要', minor: '次要' }[s] || s)
 
 const markLabel = (mark) => ({ yellow: '疑似AI', red: '逻辑问题', green: '可取之处' }[mark] || mark)
 
@@ -151,15 +174,16 @@ async function handleSave() {
             {{ levelLabel }}
           </span>
           <span class="mode-indicator report-indicator">分析模式</span>
+          <span v-if="analysisStore.isRunning" class="streaming-dot">生成中...</span>
         </div>
         <div class="toolbar-right">
-          <button class="tb-btn" @click="handleCopy">
+          <button class="tb-btn" @click="handleCopy" :disabled="analysisStore.isRunning">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
             </svg>
             {{ copied ? '已复制' : '复制' }}
           </button>
-          <button class="tb-btn primary" @click="handleSave">
+          <button class="tb-btn primary" @click="handleSave" :disabled="analysisStore.isRunning">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
             </svg>
@@ -168,9 +192,95 @@ async function handleSave() {
         </div>
       </div>
 
-      <article class="markdown-body" v-html="renderedHTML"></article>
+      <Transition name="report-in">
+        <article class="markdown-body" v-html="renderedHTML"></article>
+      </Transition>
     </template>
 
+    <!-- ===== 运行中：展示已完成的中间结果 ===== -->
+    <div v-else-if="analysisStore.isRunning && hasIntermediate" class="intermediate-view">
+      <div class="intermediate-header">
+        <span class="intermediate-badge">分析进行中</span>
+        <span class="intermediate-hint">报告生成后将自动替换此视图</span>
+      </div>
+
+      <!-- Triage -->
+      <TransitionGroup name="step-in">
+        <div v-if="triageResult && !triageResult.skipped" key="triage" class="inter-card">
+          <div class="inter-card-head">
+            <span class="inter-dot done"></span>
+            <span class="inter-card-title">预判</span>
+            <span class="inter-badge" :class="triageResult.level === 'deep' ? 'badge-deep' : triageResult.level === 'quick' ? 'badge-quick' : 'badge-skip'">
+              {{ triageResult.level === 'deep' ? '值得深读' : triageResult.level === 'quick' ? '快速定性' : '建议跳过' }}
+            </span>
+          </div>
+          <p class="inter-card-body" v-if="triageResult.verdict">{{ triageResult.verdict }}</p>
+        </div>
+
+        <!-- Extract -->
+        <div v-if="extractResult && !extractResult.skipped" key="extract" class="inter-card">
+          <div class="inter-card-head">
+            <span class="inter-dot done"></span>
+            <span class="inter-card-title">论证结构</span>
+          </div>
+          <div class="inter-card-body">
+            <div v-if="extractResult.core_claim" class="extract-claim">
+              <span class="extract-label">核心主张</span>
+              {{ extractResult.core_claim }}
+            </div>
+            <ul v-if="extractResult.premises?.length" class="extract-premises">
+              <li v-for="p in extractResult.premises" :key="p.id">
+                <span class="premise-tag" :class="p.explicit ? 'tag-explicit' : 'tag-implicit'">
+                  {{ p.explicit ? '显性' : '隐含' }}
+                </span>
+                {{ p.content }}
+              </li>
+            </ul>
+            <div v-if="extractResult.conclusion" class="extract-conclusion">
+              <span class="extract-label">结论</span>
+              {{ extractResult.conclusion }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Detect -->
+        <div v-if="detectResult && detectResult.issues?.length" key="detect" class="inter-card">
+          <div class="inter-card-head">
+            <span class="inter-dot done"></span>
+            <span class="inter-card-title">发现问题</span>
+            <span class="inter-count">{{ detectResult.issues.length }}</span>
+          </div>
+          <div class="inter-card-body">
+            <div
+              v-for="(issue, i) in detectResult.issues"
+              :key="i"
+              class="issue-row"
+              :class="'sev-' + issue.severity"
+            >
+              <span class="issue-sev" :class="'sev-' + issue.severity">{{ severityLabel(issue.severity) }}</span>
+              <span class="issue-type">{{ issueTypeLabel(issue.type) }}</span>
+              <span class="issue-one-line">{{ issue.one_line }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Extract/detect still running -->
+        <div v-if="!extractResult || extractResult.skipped" key="extract-pending" class="inter-card inter-pending">
+          <div class="inter-card-head">
+            <span class="inter-dot running"></span>
+            <span class="inter-card-title">提取论证结构...</span>
+          </div>
+        </div>
+        <div v-if="analysisStore.steps.report.status === 'running'" key="report-pending" class="inter-card inter-pending">
+          <div class="inter-card-head">
+            <span class="inter-dot running"></span>
+            <span class="inter-card-title">生成报告中...</span>
+          </div>
+        </div>
+      </TransitionGroup>
+    </div>
+
+    <!-- ===== 运行中：还没结果，等待动画 ===== -->
     <div v-else-if="analysisStore.isRunning" class="report-waiting">
       <div class="waiting-animation">
         <div class="typing-dots">
@@ -178,6 +288,14 @@ async function handleSave() {
         </div>
       </div>
       <p>正在生成报告...</p>
+      <div class="waiting-shimmer">
+        <div class="shimmer-line w-80"></div>
+        <div class="shimmer-line w-55"></div>
+        <div class="shimmer-line w-70"></div>
+        <div class="shimmer-line w-45"></div>
+        <div class="shimmer-line w-60"></div>
+        <div class="shimmer-line w-35"></div>
+      </div>
     </div>
 
     <!-- Tooltip -->
@@ -547,6 +665,233 @@ async function handleSave() {
   margin: 0;
 }
 
+/* ── Streaming indicator ── */
+.streaming-dot {
+  font-size: 11px;
+  color: var(--accent);
+  animation: pulse-text 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-text {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* ── Report transition ── */
+.report-in-enter-active {
+  transition: all 0.45s ease-out;
+}
+.report-in-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* ── Step transition ── */
+.step-in-enter-active {
+  transition: all 0.35s ease-out;
+}
+.step-in-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.step-in-leave-active {
+  transition: all 0.2s ease-in;
+}
+.step-in-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* ── Intermediate Results ── */
+.intermediate-view {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 40px;
+}
+
+.intermediate-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.intermediate-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.intermediate-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.inter-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 12px;
+  transition: border-color var(--transition);
+}
+
+.inter-card:hover {
+  border-color: var(--border);
+}
+
+.inter-card.inter-pending {
+  opacity: 0.55;
+}
+
+.inter-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.inter-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.inter-dot.done {
+  background: var(--success);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.3);
+}
+
+.inter-dot.running {
+  background: var(--accent);
+  animation: typing 1.2s ease-in-out infinite;
+}
+
+.inter-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.inter-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 8px;
+  margin-left: auto;
+}
+
+.badge-deep { background: var(--accent-soft); color: var(--accent); }
+.badge-quick { background: var(--warning-soft); color: var(--warning); }
+.badge-skip { background: var(--bg); color: var(--text-muted); }
+
+.inter-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 1px 8px;
+  border-radius: 10px;
+  margin-left: auto;
+}
+
+.inter-card-body {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+
+/* ── Extract card ── */
+.extract-claim, .extract-conclusion {
+  margin-bottom: 8px;
+}
+
+.extract-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-right: 8px;
+}
+
+.extract-premises {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+}
+
+.extract-premises li {
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.premise-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+
+.tag-explicit { background: var(--bg); color: var(--text-secondary); border: 1px solid var(--border); }
+.tag-implicit { background: var(--warning-soft); color: var(--warning); }
+
+/* ── Detect card ── */
+.issue-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.issue-row + .issue-row {
+  border-top: 1px solid var(--border-light);
+}
+
+.issue-row.sev-critical {
+  background: var(--danger-soft);
+  margin: 0 -12px;
+  padding-left: 12px;
+  padding-right: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.issue-row.sev-critical + .issue-row.sev-critical {
+  border-top: none;
+}
+
+.issue-sev {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.issue-sev.sev-critical { background: var(--danger); color: white; }
+.issue-sev.sev-major { background: var(--warning-soft); color: var(--warning); }
+.issue-sev.sev-minor { background: var(--bg); color: var(--text-muted); }
+
+.issue-type {
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.issue-one-line {
+  color: var(--text-secondary);
+}
+
 /* ── Waiting ── */
 .report-waiting {
   display: flex;
@@ -581,5 +926,38 @@ async function handleSave() {
 .report-waiting p {
   font-size: 14px;
   color: var(--text-muted);
+}
+
+/* ── Shimmer skeleton ── */
+.waiting-shimmer {
+  width: 100%;
+  max-width: 400px;
+  margin-top: 8px;
+}
+
+.shimmer-line {
+  height: 13px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--border-light) 25%,
+    var(--bg) 50%,
+    var(--border-light) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+.shimmer-line.w-80 { width: 80%; }
+.shimmer-line.w-70 { width: 70%; }
+.shimmer-line.w-60 { width: 60%; }
+.shimmer-line.w-55 { width: 55%; }
+.shimmer-line.w-45 { width: 45%; }
+.shimmer-line.w-35 { width: 35%; }
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 </style>

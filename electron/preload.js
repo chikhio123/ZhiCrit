@@ -10,5 +10,13 @@ contextBridge.exposeInMainWorld('zhicrit', {
     const handler = (_event, payload) => callback(payload)
     ipcRenderer.on('analyze:progress', handler)
     return () => ipcRenderer.removeListener('analyze:progress', handler)
-  }
+  },
+  onChunk: (callback) => {
+    const handler = (_event, payload) => callback(payload)
+    ipcRenderer.on('analyze:chunk', handler)
+    return () => ipcRenderer.removeListener('analyze:chunk', handler)
+  },
+  listHistory: () => ipcRenderer.invoke('history:list'),
+  getHistory: (id) => ipcRenderer.invoke('history:get', id),
+  deleteHistory: (id) => ipcRenderer.invoke('history:delete', id)
 })

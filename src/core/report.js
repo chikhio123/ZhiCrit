@@ -1,13 +1,7 @@
-const { callAPI } = require('./api')
+const { callAPI, callAPIStream } = require('./api')
 
-/**
- * Step 4: Report Generation — integrate outputs from steps 1–3 into a Markdown report.
- */
-async function report(articleText, triageResult, structure, detectResult, config, loadPrompt) {
-  const systemPrompt = loadPrompt('report.md')
-
+function buildUserMessage(articleText, triageResult, structure, detectResult) {
   const triageStr = JSON.stringify(triageResult, null, 2)
-
   const isQuick = !structure
 
   const parts = [
@@ -26,10 +20,28 @@ async function report(articleText, triageResult, structure, detectResult, config
     parts.push('', '## 注意', '本次为快速分析（quick），跳过了结构提取和问题标记步骤。请仅根据预判结果组织报告，论证结构和问题清单部分标注"快速分析模式，跳过此步骤"即可。')
   }
 
-  const userMessage = parts.join('\n')
+  return parts.join('\n')
+}
 
+/**
+ * Step 4: Report Generation — integrate outputs from steps 1–3 into a Markdown report.
+ */
+async function report(articleText, triageResult, structure, detectResult, config, loadPrompt) {
+  const systemPrompt = loadPrompt('report.md')
+  const userMessage = buildUserMessage(articleText, triageResult, structure, detectResult)
   const content = await callAPI(systemPrompt, userMessage, { ...config, max_tokens: 8192 })
   return content
 }
 
-module.exports = { report }
+/**
+ * Streaming variant — yields markdown chunks as they arrive.
+ */
+async function* reportStream(articleText, triageResult, structure, detectResult, config, loadPrompt) {
+  const systemPrompt = loadPrompt('report.md')
+  const userMessage = buildUserMessage(articleText, triageResult, structure, detectResult)
+  for await (const chunk of callAPIStream(systemPrompt, userMessage, { ...config, max_tokens: 8192 })) {
+    yield chunk
+  }
+}
+
+module.exports = { report, reportStream }

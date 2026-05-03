@@ -13,6 +13,7 @@ export const useConfigStore = defineStore('config', {
   state: () => ({
     profiles: [],
     activeProfile: null,
+    streaming: false,
     loaded: false
   }),
 
@@ -49,6 +50,7 @@ export const useConfigStore = defineStore('config', {
       const config = await window.zhicrit.getConfig()
       this.profiles = config.profiles || [{ name: '默认', ...profileDefaults }]
       this.activeProfile = config.activeProfile || this.profiles[0]?.name || '默认'
+      this.streaming = config.streaming ?? false
       this.loaded = true
     },
 
@@ -56,7 +58,8 @@ export const useConfigStore = defineStore('config', {
       // Deep-clone to strip Vue reactivity proxies for IPC structured-clone
       const data = JSON.parse(JSON.stringify({
         profiles: this.profiles,
-        activeProfile: this.activeProfile
+        activeProfile: this.activeProfile,
+        streaming: this.streaming
       }))
       if (!window.zhicrit) {
         localStorage.setItem('zhicrit-config', JSON.stringify(data))

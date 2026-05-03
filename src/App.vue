@@ -4,6 +4,8 @@ import ArticleInput from './components/ArticleInput.vue'
 import AnalysisPanel from './components/AnalysisPanel.vue'
 import ReportView from './components/ReportView.vue'
 import Settings from './components/Settings.vue'
+import HistoryPanel from './components/HistoryPanel.vue'
+import StatsPanel from './components/StatsPanel.vue'
 import ToastMessage from './components/ToastMessage.vue'
 import { useConfigStore } from './stores/config.js'
 import { useAnalysisStore } from './stores/analysis.js'
@@ -12,6 +14,8 @@ const configStore = useConfigStore()
 const analysisStore = useAnalysisStore()
 
 const showSettings = ref(false)
+const showHistory = ref(false)
+const showStats = ref(false)
 const leftWidth = ref(480)
 const dragging = ref(false)
 
@@ -63,23 +67,59 @@ configStore.load()
           <span class="app-subtitle">中文文章批判性分析工具</span>
         </div>
       </div>
-      <button
-        class="settings-btn"
-        :class="{ active: showSettings }"
-        @click="showSettings = !showSettings"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-        </svg>
-        {{ showSettings ? '返回' : '设置' }}
-      </button>
+      <div class="header-actions">
+        <button
+          class="header-btn"
+          :class="{ active: showStats }"
+          @click="showStats = !showStats; showHistory = false; showSettings = false"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="12" width="4" height="8" rx="1"/>
+            <rect x="10" y="7" width="4" height="13" rx="1"/>
+            <rect x="17" y="3" width="4" height="17" rx="1"/>
+          </svg>
+          {{ showStats ? '返回' : '统计' }}
+        </button>
+        <button
+          class="header-btn"
+          :class="{ active: showHistory }"
+          @click="showHistory = !showHistory; showSettings = false; showStats = false"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          {{ showHistory ? '返回' : '历史' }}
+        </button>
+        <button
+          class="header-btn"
+          :class="{ active: showSettings }"
+          @click="showSettings = !showSettings; showHistory = false; showStats = false"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+          </svg>
+          {{ showSettings ? '返回' : '设置' }}
+        </button>
+      </div>
     </header>
 
     <main class="app-main">
       <Transition name="settings-slide">
         <div v-if="showSettings" class="settings-overlay">
           <Settings />
+        </div>
+      </Transition>
+
+      <Transition name="settings-slide">
+        <div v-if="showHistory" class="settings-overlay">
+          <HistoryPanel @close="showHistory = false" />
+        </div>
+      </Transition>
+
+      <Transition name="settings-slide">
+        <div v-if="showStats" class="settings-overlay">
+          <StatsPanel @close="showStats = false" />
         </div>
       </Transition>
 
@@ -259,7 +299,12 @@ body {
   margin-top: -1px;
 }
 
-.settings-btn {
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.header-btn {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -274,13 +319,13 @@ body {
   font-family: inherit;
   white-space: nowrap;
 }
-.settings-btn:hover {
+.header-btn:hover {
   background: var(--bg);
   border-color: var(--accent);
   color: var(--accent);
   box-shadow: var(--shadow-sm);
 }
-.settings-btn.active {
+.header-btn.active {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);

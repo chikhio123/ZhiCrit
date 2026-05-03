@@ -212,6 +212,11 @@ async function handleAdd() {
   window.__toast?.success(`已添加「${name}」～`)
 }
 
+async function handleStreamingToggle(event) {
+  configStore.streaming = event.target.checked
+  await configStore.save()
+}
+
 async function handleDelete() {
   if (!canDelete.value) return
   const name = selectedName.value
@@ -373,6 +378,17 @@ async function handleDelete() {
             <span class="slider-val">{{ form.temperature }}</span>
           </div>
         </div>
+      </div>
+
+      <div class="streaming-toggle">
+        <div class="streaming-info">
+          <span class="streaming-label">流式输出</span>
+          <span class="streaming-desc">报告生成时实时显示文字</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" :checked="configStore.streaming" @change="handleStreamingToggle" />
+          <span class="toggle-slider"></span>
+        </label>
       </div>
 
       <div class="settings-actions">
@@ -791,6 +807,76 @@ async function handleDelete() {
   min-width: 24px;
   text-align: center;
   font-variant-numeric: tabular-nums;
+}
+
+/* ── Streaming Toggle ── */
+.streaming-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-light);
+}
+
+.streaming-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.streaming-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.streaming-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--border);
+  border-radius: 24px;
+  transition: all 0.25s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: all 0.25s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
 }
 
 .settings-actions {
