@@ -5,6 +5,5 @@ output/*.md
 .env
 config.json
 
-# Claude Code — keep project commands, ignore auto-generated local files
-.claude/*
-!.claude/commands/
+# Claude Code
+.claude/
