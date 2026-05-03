@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('zhicrit', {
   getConfig: () => ipcRenderer.invoke('config:get'),
   setConfig: (config) => ipcRenderer.invoke('config:set', config),
-  startAnalysis: (articleText, mode, outputMode) => ipcRenderer.invoke('analyze:start', articleText, mode, outputMode),
+  startAnalysis: (articleText, mode, outputMode, prevSteps) => ipcRenderer.invoke('analyze:start', articleText, mode, outputMode, prevSteps),
   saveReport: (markdown) => ipcRenderer.invoke('report:save', markdown),
   showMessage: (options) => ipcRenderer.invoke('dialog:message', options),
   onProgress: (callback) => {

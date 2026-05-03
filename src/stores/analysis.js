@@ -73,6 +73,23 @@ export const useAnalysisStore = defineStore('analysis', {
         }
       }
 
+      // Capture existing results to avoid re-running steps — only if same article
+      // and the results are real (not skip placeholders from quick mode).
+      const sameArticle = this.articleText === this.lastAnalyzedText
+      const prevSteps = {}
+      if (sameArticle) {
+        for (const key of ['triage', 'extract', 'detect']) {
+          const r = this.steps[key].result
+          if (this.steps[key].status === 'done' && r && !r.skipped) {
+            prevSteps[key] = r
+          }
+        }
+        // Pass existing report to annotate for richer context
+        if (this.outputMode === 'annotate' && this.report) {
+          prevSteps.report = { markdown: this.report }
+        }
+      }
+
       this.reset()
       this.status = 'running'
       this.lastAnalyzedText = this.articleText
@@ -83,7 +100,9 @@ export const useAnalysisStore = defineStore('analysis', {
       })
 
       try {
-        const result = await window.zhicrit.startAnalysis(this.articleText, this.mode, this.outputMode)
+        const result = await window.zhicrit.startAnalysis(
+          this.articleText, this.mode, this.outputMode, prevSteps
+        )
         if (result.error) {
           this.status = 'error'
           this.error = result.error

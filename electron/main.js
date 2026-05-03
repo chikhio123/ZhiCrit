@@ -157,7 +157,7 @@ ipcMain.handle('report:save', async (_event, markdown) => {
   return { success: false }
 })
 
-ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', outputMode = 'report') => {
+ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', outputMode = 'report', prevSteps = null) => {
   const config = getActiveConfig(loadConfig())
 
   if (!config.api_key) {
@@ -179,10 +179,15 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', output
   let finalResult = null
 
   try {
-    // Step 1: Triage
-    send({ step: 'triage', status: 'running' })
-    const triageResult = await triage(articleText, config, (p) => loadPrompt(p))
-    send({ step: 'triage', status: 'done', result: triageResult })
+    // Step 1: Triage — reuse if available
+    let triageResult = (prevSteps && prevSteps.triage) || null
+    if (triageResult) {
+      send({ step: 'triage', status: 'done', result: triageResult, cached: true })
+    } else {
+      send({ step: 'triage', status: 'running' })
+      triageResult = await triage(articleText, config, (p) => loadPrompt(p))
+      send({ step: 'triage', status: 'done', result: triageResult })
+    }
 
     // Skip gate only applies when user didn't explicitly choose deep
     if (triageResult.level === 'skip' && mode !== 'deep') {
@@ -198,15 +203,25 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', output
     let detectResult = null
 
     if (!isQuick) {
-      // Step 2: Extract
-      send({ step: 'extract', status: 'running' })
-      extractResult = await extract(articleText, config, (p) => loadPrompt(p))
-      send({ step: 'extract', status: 'done', result: extractResult })
+      // Step 2: Extract — reuse if available
+      extractResult = (prevSteps && prevSteps.extract) || null
+      if (extractResult) {
+        send({ step: 'extract', status: 'done', result: extractResult, cached: true })
+      } else {
+        send({ step: 'extract', status: 'running' })
+        extractResult = await extract(articleText, config, (p) => loadPrompt(p))
+        send({ step: 'extract', status: 'done', result: extractResult })
+      }
 
-      // Step 3: Detect
-      send({ step: 'detect', status: 'running' })
-      detectResult = await detect(articleText, extractResult, config, (p) => loadPrompt(p))
-      send({ step: 'detect', status: 'done', result: detectResult })
+      // Step 3: Detect — reuse if available
+      detectResult = (prevSteps && prevSteps.detect) || null
+      if (detectResult) {
+        send({ step: 'detect', status: 'done', result: detectResult, cached: true })
+      } else {
+        send({ step: 'detect', status: 'running' })
+        detectResult = await detect(articleText, extractResult, config, (p) => loadPrompt(p))
+        send({ step: 'detect', status: 'done', result: detectResult })
+      }
     } else {
       // Quick mode: skip structure extraction and issue detection
       send({ step: 'extract', status: 'done', result: { skipped: true } })
@@ -217,9 +232,11 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', output
     let reportText = null
     let annotateResult = null
 
-    // Report: skipped only in quick annotate mode; deep always runs both
-    // so switching report ↔ annotate is instant.
-    if (isAnnotate && isQuick) {
+    // Report: run only in report mode, or reuse cached
+    if (prevSteps && prevSteps.report) {
+      reportText = prevSteps.report.markdown
+      send({ step: 'report', status: 'done', result: { markdown: reportText }, cached: true })
+    } else if (isAnnotate) {
       send({ step: 'report', status: 'done', result: { skipped: true } })
     } else {
       send({ step: 'report', status: 'running' })
@@ -229,22 +246,22 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', output
       send({ step: 'report', status: 'done', result: { markdown: reportText } })
     }
 
-    // Annotate: skipped only in quick report mode
-    if (!isAnnotate && isQuick) {
+    // Annotate: run only in annotate mode
+    if (!isAnnotate) {
       send({ step: 'annotate', status: 'done', result: { skipped: true } })
     } else {
       send({ step: 'annotate', status: 'running' })
       annotateResult = await annotate(
-        articleText, triageResult, extractResult, detectResult, config, (p) => loadPrompt(p)
+        articleText, triageResult, extractResult, detectResult, reportText, config, (p) => loadPrompt(p)
       )
+      send({ step: 'annotate', status: 'done', result: annotateResult })
     }
-    send({ step: 'annotate', status: 'done', result: annotateResult })
 
     finalResult = {
       level: isQuick ? 'quick' : 'deep',
       outputMode,
       report: reportText,
-      annotations: annotateResult.annotations || []
+      annotations: annotateResult?.annotations || []
     }
     send({ step: 'done', result: finalResult })
 

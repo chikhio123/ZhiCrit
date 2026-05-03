@@ -11,7 +11,7 @@ const { callAPI, parseJSON } = require('./api')
  * Returns:
  *   { annotations: [{ quote, mark, reason }] }
  */
-async function annotate(articleText, triageResult, extractResult, detectResult, config, loadPrompt) {
+async function annotate(articleText, triageResult, extractResult, detectResult, reportText, config, loadPrompt) {
   const systemPrompt = loadPrompt('annotate.md')
 
   const context = {
@@ -31,8 +31,12 @@ async function annotate(articleText, triageResult, extractResult, detectResult, 
     }
   }
 
-  const userMessage =
+  let userMessage =
     `以下分析结果仅供参考——你必须独立判断，如果你发现了分析结果没提到的问题或优点，同样要标记出来。\n\n分析结果：\n${JSON.stringify(context, null, 2)}\n\n原文：\n${articleText}\n\n请逐段扫描原文，找出每一个需要标记的句子。不要漏掉断言无支撑、虚假二分、空洞金句。优点也要同等力度标记。`
+
+  if (reportText) {
+    userMessage = `以下为完整分析报告，用于了解全文整体判断，但标注时仍需独立审视每个句子：\n\n## 分析报告\n${reportText}\n\n---\n\n${userMessage}`
+  }
 
   const content = await callAPI(systemPrompt, userMessage, config)
 
