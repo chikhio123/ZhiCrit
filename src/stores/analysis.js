@@ -8,6 +8,7 @@ export const useAnalysisStore = defineStore('analysis', {
     articleText: '',
     lastAnalyzedText: '',
     lastMode: null,
+    lastOutputMode: null,
     // Step states: idle | running | done | error
     steps: {
       triage: { status: 'idle', result: null, error: null },
@@ -61,13 +62,14 @@ export const useAnalysisStore = defineStore('analysis', {
       if (!this.articleText.trim()) return
 
       // Cache: same article + same depth → instant mode switch
+      // Only when switching to a different output mode that already has results
       const sameRequest = this.articleText === this.lastAnalyzedText && this.mode === this.lastMode
       if (sameRequest && this.status === 'done') {
-        if (this.outputMode === 'annotate' && this.annotations.length) {
+        if (this.outputMode === 'annotate' && this.outputMode !== this.lastOutputMode && this.annotations.length) {
           window.__toast?.success('已切换至标注模式～')
           return
         }
-        if (this.outputMode === 'report' && this.report) {
+        if (this.outputMode === 'report' && this.outputMode !== this.lastOutputMode && this.report) {
           window.__toast?.success('已切换至分析模式～')
           return
         }
@@ -115,6 +117,7 @@ export const useAnalysisStore = defineStore('analysis', {
           this.report = result.report
           this.annotations = result.annotations || []
           this.outputMode = result.outputMode || this.outputMode
+          this.lastOutputMode = this.outputMode
           if (result.level === 'skip') {
             window.__toast?.info('该文章无需深度分析')
           } else {
@@ -142,6 +145,7 @@ export const useAnalysisStore = defineStore('analysis', {
           this.report = result.report
           this.annotations = result.annotations || []
           this.outputMode = result.outputMode || this.outputMode
+          this.lastOutputMode = this.outputMode
         }
         return
       }
