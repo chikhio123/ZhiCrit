@@ -14,6 +14,7 @@ export const useConfigStore = defineStore('config', {
     profiles: [],
     activeProfile: null,
     streaming: false,
+    theme: 'auto',
     loaded: false
   }),
 
@@ -51,6 +52,7 @@ export const useConfigStore = defineStore('config', {
       this.profiles = config.profiles || [{ name: '默认', ...profileDefaults }]
       this.activeProfile = config.activeProfile || this.profiles[0]?.name || '默认'
       this.streaming = config.streaming ?? false
+      this.theme = config.theme || 'auto'
       this.loaded = true
     },
 
@@ -59,7 +61,8 @@ export const useConfigStore = defineStore('config', {
       const data = JSON.parse(JSON.stringify({
         profiles: this.profiles,
         activeProfile: this.activeProfile,
-        streaming: this.streaming
+        streaming: this.streaming,
+        theme: this.theme
       }))
       if (!window.zhicrit) {
         localStorage.setItem('zhicrit-config', JSON.stringify(data))

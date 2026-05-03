@@ -1,11 +1,12 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import ArticleInput from './components/ArticleInput.vue'
 import AnalysisPanel from './components/AnalysisPanel.vue'
 import ReportView from './components/ReportView.vue'
 import Settings from './components/Settings.vue'
 import HistoryPanel from './components/HistoryPanel.vue'
 import StatsPanel from './components/StatsPanel.vue'
+import RecentSummary from './components/RecentSummary.vue'
 import ToastMessage from './components/ToastMessage.vue'
 import { useConfigStore } from './stores/config.js'
 import { useAnalysisStore } from './stores/analysis.js'
@@ -52,9 +53,29 @@ function onMouseUp() {
 onUnmounted(() => {
   document.removeEventListener('mousemove', onMouseMove)
   document.removeEventListener('mouseup', onMouseUp)
+  mq.removeEventListener('change', onSystemThemeChange)
 })
 
 configStore.load()
+
+function applyTheme(theme) {
+  if (theme === 'auto') {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    document.documentElement.dataset.theme = prefersDark ? 'dark' : 'light'
+  } else {
+    document.documentElement.dataset.theme = theme
+  }
+}
+
+applyTheme(configStore.theme)
+watch(() => configStore.theme, applyTheme)
+
+const mq = window.matchMedia('(prefers-color-scheme: dark)')
+function onSystemThemeChange() {
+  if (configStore.theme === 'auto') applyTheme('auto')
+}
+mq.addEventListener('change', onSystemThemeChange)
+
 </script>
 
 <template>
@@ -138,6 +159,7 @@ configStore.load()
 
       <section class="panel panel-right">
         <div v-if="analysisStore.status === 'idle'" class="placeholder">
+          <RecentSummary />
           <div class="placeholder-art">
             <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
               <rect x="14" y="10" width="52" height="60" rx="4" fill="currentColor" opacity="0.06"/>
@@ -177,7 +199,9 @@ configStore.load()
 /* ── Design Tokens ── */
 :root {
   --bg: #f8f7f4;
+  --bg-rgb: 248 247 244;
   --bg-card: #ffffff;
+  --bg-card-rgb: 255 255 255;
   --bg-raised: #fcfbf9;
   --border: #eae7e0;
   --border-light: #f0ede8;
@@ -185,6 +209,7 @@ configStore.load()
   --text-secondary: #5c5c5c;
   --text-muted: #a0a0a0;
   --accent: #0084FF;
+  --accent-rgb: 0 132 255;
   --accent-glow: rgba(0, 132, 255, 0.12);
   --accent-soft: #e8f4ff;
   --accent-hover: #0070db;
@@ -202,6 +227,34 @@ configStore.load()
   --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
   --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
   --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] {
+  --bg: #1a1b1e;
+  --bg-rgb: 26 27 30;
+  --bg-card: #252629;
+  --bg-card-rgb: 37 38 41;
+  --bg-raised: #2c2e32;
+  --border: #3a3c40;
+  --border-light: #2e3034;
+  --text: #e8e6e3;
+  --text-secondary: #b0ada8;
+  --text-muted: #6b6a66;
+  --accent: #3399ff;
+  --accent-rgb: 51 153 255;
+  --accent-glow: rgba(51, 153, 255, 0.10);
+  --accent-soft: #1a2a3d;
+  --accent-hover: #4da6ff;
+  --success: #34d399;
+  --success-soft: #0f2f21;
+  --warning: #fbbf24;
+  --warning-soft: #2d2410;
+  --danger: #f87171;
+  --danger-soft: #2d1518;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
 }
 
 * {
@@ -251,7 +304,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 14px 24px;
-  background: rgba(255,255,255,0.75);
+  background: rgba(var(--bg-card-rgb), 0.75);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-light);
@@ -276,7 +329,7 @@ body {
   font-weight: 800;
   font-size: 16px;
   border-radius: var(--radius-sm);
-  box-shadow: 0 2px 8px rgba(0, 132, 255, 0.3);
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.3);
 }
 
 .app-title {
@@ -468,7 +521,7 @@ body {
   inset: 0;
   z-index: 20;
   overflow-y: auto;
-  background: rgba(248, 247, 244, 0.55);
+  background: rgba(var(--bg-rgb), 0.55);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-radius: var(--radius-lg);

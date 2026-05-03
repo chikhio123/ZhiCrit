@@ -357,11 +357,11 @@ textarea::placeholder {
   cursor: pointer;
   transition: all var(--transition);
   font-family: inherit;
-  box-shadow: 0 2px 8px rgba(0, 132, 255, 0.25);
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.25);
 }
 .btn-analyze:hover:not(:disabled) {
   background: var(--accent-hover);
-  box-shadow: 0 4px 16px rgba(0, 132, 255, 0.35);
+  box-shadow: 0 4px 16px rgba(var(--accent-rgb), 0.35);
   transform: translateY(-1px);
 }
 .btn-analyze:active:not(:disabled) {

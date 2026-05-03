@@ -8,6 +8,9 @@ export const useHistoryStore = defineStore('history', {
   }),
 
   getters: {
+    latestEntry(state) {
+      return state.list[0] || null
+    },
     stats(state) {
       const list = state.list
       if (!list.length) return null
@@ -45,6 +48,16 @@ export const useHistoryStore = defineStore('history', {
 
   actions: {
     async loadList() {
+      if (this._loadPromise) return this._loadPromise
+      this._loadPromise = this._doLoad()
+      try {
+        return await this._loadPromise
+      } finally {
+        this._loadPromise = null
+      }
+    },
+
+    async _doLoad() {
       this.loading = true
       try {
         if (window.zhicrit) {

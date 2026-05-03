@@ -125,7 +125,12 @@ async function* callAPIStream(systemPrompt, userMessage, config) {
 
   const controller = new AbortController()
   const timeoutMs = config.timeout_ms || 120000
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const idleMs = 30000
+  let timer = setTimeout(() => controller.abort(), timeoutMs)
+  const resetTimer = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => controller.abort(), idleMs)
+  }
 
   let response
   try {
@@ -184,7 +189,7 @@ async function* callAPIStream(systemPrompt, userMessage, config) {
   let buffer = ''
   try {
     for await (const chunk of response.body) {
-      clearTimeout(timer)
+      resetTimer()
       buffer += chunk.toString()
       const lines = buffer.split('\n')
       buffer = lines.pop() || ''

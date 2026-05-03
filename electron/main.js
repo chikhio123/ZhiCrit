@@ -90,17 +90,17 @@ function getPromptPath(name) {
   return path.join(process.resourcesPath, 'prompts', name)
 }
 
-// Ensure output dir exists
-function ensureOutputDir() {
-  const outDir = path.join(__dirname, '..', 'output')
-  if (!fs.existsSync(outDir)) {
-    fs.mkdirSync(outDir, { recursive: true })
+// History storage — uses userData so it survives app updates and works in production
+function getHistoryDir() {
+  const dir = path.join(app.getPath('userData'), 'history')
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true })
   }
+  return dir
 }
 
 function getHistoryPath() {
-  ensureOutputDir()
-  return path.join(__dirname, '..', 'output', 'history.json')
+  return path.join(getHistoryDir(), 'history.json')
 }
 
 function loadHistory() {
@@ -120,8 +120,7 @@ function saveHistory(list) {
 }
 
 function getReportPath(id) {
-  ensureOutputDir()
-  return path.join(__dirname, '..', 'output', `analysis-${id}.md`)
+  return path.join(getHistoryDir(), `analysis-${id}.md`)
 }
 
 function loadPrompt(name) {

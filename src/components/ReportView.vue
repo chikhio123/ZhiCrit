@@ -4,7 +4,7 @@ import { useAnalysisStore } from '../stores/analysis.js'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
-import 'highlight.js/styles/github.css'
+import 'highlight.js/styles/github-dark.css'
 
 const analysisStore = useAnalysisStore()
 const copied = ref(false)
@@ -379,8 +379,8 @@ async function handleSave() {
   color: var(--accent);
 }
 .mode-indicator.annotate-indicator {
-  background: rgba(34, 197, 94, 0.1);
-  color: #16a34a;
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .tb-btn {
@@ -410,7 +410,7 @@ async function handleSave() {
 }
 .tb-btn.primary:hover {
   background: var(--accent-hover);
-  box-shadow: 0 2px 8px rgba(0, 132, 255, 0.3);
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.3);
 }
 
 /* ── Markdown Body ── */
@@ -478,7 +478,7 @@ async function handleSave() {
   border-radius: 4px;
   font-size: 0.88em;
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  color: #e11d48;
+  color: var(--danger);
 }
 
 .markdown-body :deep(pre) {
@@ -627,7 +627,7 @@ async function handleSave() {
   z-index: 10000;
   background: var(--bg-card);
   border-radius: var(--radius);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
   padding: 14px 18px;
   max-width: 320px;
   border: 1px solid var(--border);

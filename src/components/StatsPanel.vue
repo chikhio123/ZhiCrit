@@ -127,7 +127,7 @@ const maxMonthCount = computed(() => {
   align-items: flex-start;
   justify-content: center;
   padding: 40px 20px;
-  background: rgba(248, 247, 244, 0.55);
+  background: rgba(var(--bg-rgb), 0.55);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-radius: var(--radius-lg);

@@ -93,27 +93,27 @@ if (typeof window !== 'undefined') {
 }
 
 .toast-success {
-  background: rgba(236, 253, 245, 0.95);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #065f46;
+  background: var(--success-soft);
+  border: 1px solid var(--success);
+  color: var(--text);
 }
 
 .toast-warning {
-  background: rgba(255, 251, 235, 0.95);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  color: #92400e;
+  background: var(--warning-soft);
+  border: 1px solid var(--warning);
+  color: var(--text);
 }
 
 .toast-error {
-  background: rgba(254, 242, 242, 0.95);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #991b1b;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  color: var(--text);
 }
 
 .toast-info {
-  background: rgba(232, 244, 255, 0.95);
-  border: 1px solid rgba(0, 132, 255, 0.25);
-  color: #1e40af;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--text);
 }
 
 .toast-icon {

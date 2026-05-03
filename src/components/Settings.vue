@@ -391,6 +391,15 @@ async function handleDelete() {
         </label>
       </div>
 
+      <div class="setting-row">
+        <div class="setting-label">主题</div>
+        <div class="seg-group">
+          <button class="seg-btn" :class="{ active: configStore.theme === 'light' }" @click="configStore.theme = 'light'; configStore.save()">浅色</button>
+          <button class="seg-btn" :class="{ active: configStore.theme === 'dark' }" @click="configStore.theme = 'dark'; configStore.save()">深色</button>
+          <button class="seg-btn" :class="{ active: configStore.theme === 'auto' }" @click="configStore.theme = 'auto'; configStore.save()">自动</button>
+        </div>
+      </div>
+
       <div class="settings-actions">
         <button class="save-btn" @click="handleSave">保存配置</button>
       </div>
@@ -784,7 +793,7 @@ async function handleDelete() {
   height: 8px;
   border-radius: 50%;
   background: var(--success);
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 6px var(--success);
 }
 
 .slider-group {
@@ -879,6 +888,52 @@ async function handleDelete() {
   transform: translateX(20px);
 }
 
+/* ── Theme Selector ── */
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-light);
+}
+
+.setting-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.seg-group {
+  display: flex;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.seg-btn {
+  flex: 1;
+  padding: 8px 16px;
+  border: none;
+  background: var(--bg-card);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.seg-btn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.seg-btn.active {
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+
 .settings-actions {
   margin-top: 24px;
   padding-top: 20px;
@@ -901,11 +956,11 @@ async function handleDelete() {
   font-family: inherit;
   cursor: pointer;
   transition: all var(--transition);
-  box-shadow: 0 2px 8px rgba(0, 132, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.2);
 }
 .save-btn:hover {
   background: var(--accent-hover);
-  box-shadow: 0 4px 16px rgba(0, 132, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(var(--accent-rgb), 0.3);
   transform: translateY(-1px);
 }
 
