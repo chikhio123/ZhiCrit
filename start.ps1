@@ -1,8 +1,8 @@
-# ZhiCrit Launcher (PowerShell)
+# 论衡 Launcher (PowerShell)
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
-Write-Host "  🔍 知友 ZhiCrit" -ForegroundColor White
+Write-Host "  论衡" -ForegroundColor White
 Write-Host "  ------------------------------"
 
 # Kill any process on port 5173
@@ -32,4 +32,4 @@ $env:VITE_PORT = "5173"
 npm run dev
 
 Write-Host ""
-Write-Host "  知友已关闭" -ForegroundColor Gray
+Write-Host "  论衡已关闭" -ForegroundColor Gray

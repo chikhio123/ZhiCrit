@@ -107,7 +107,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: '知友 ZhiCrit',
+    title: '论衡',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -128,7 +128,7 @@ function createWindow() {
 ipcMain.handle('dialog:message', async (_event, options) => {
   const result = await dialog.showMessageBox(mainWindow, {
     type: options.type || 'info',
-    title: options.title || '知友',
+    title: options.title || '论衡',
     message: options.message,
     buttons: ['确定']
   })

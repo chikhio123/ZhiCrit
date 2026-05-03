@@ -57,9 +57,9 @@ configStore.load()
   <div class="app-shell">
     <header class="app-header">
       <div class="header-brand">
-        <div class="logo-mark">Z</div>
+        <div class="logo-mark">论</div>
         <div class="brand-text">
-          <h1 class="app-title">知友 <span class="title-en">ZhiCrit</span></h1>
+          <h1 class="app-title">论衡</h1>
           <span class="app-subtitle">中文文章批判性分析工具</span>
         </div>
       </div>

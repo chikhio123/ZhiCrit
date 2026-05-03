@@ -1,7 +1,7 @@
 {
   "name": "zhicrit",
   "version": "1.0.0",
-  "description": "知友 - 中文文章批判性分析工具",
+  "description": "论衡 - 中文文章批判性分析工具",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
@@ -27,7 +27,7 @@
   },
   "build": {
     "appId": "com.zhicrit.app",
-    "productName": "知友",
+    "productName": "论衡",
     "directories": {
       "output": "dist-electron"
     },

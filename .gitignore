@@ -7,3 +7,7 @@ config.json
 
 # Claude Code
 .claude/
+
+# Playwright test artifacts
+.playwright-mcp/
+*.png

@@ -2,7 +2,7 @@
 cd /d "%~dp0"
 
 echo.
-echo   ZhiCrit Launcher
+echo   论衡 Launcher
 echo   ------------------------------
 
 :: Kill any process on port 5173
@@ -27,4 +27,4 @@ set VITE_PORT=5173
 call npm run dev
 
 echo.
-echo   ZhiCrit closed
+echo   论衡 closed
