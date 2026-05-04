@@ -43,7 +43,8 @@ async function annotate(articleText, triageResult, extractResult, detectResult, 
 
   try {
     return parseJSON(content)
-  } catch {
+  } catch (e) {
+    console.error('annotate parseJSON failed:', e.message, content.slice(0, 200))
     return { annotations: [], raw: content }
   }
 }

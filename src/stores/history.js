@@ -89,6 +89,12 @@ export const useHistoryStore = defineStore('history', {
             analysisStore.outputMode = entry.outputMode || 'report'
             analysisStore.articleText = entry.articleText || ''
             analysisStore.status = 'done'
+
+            // Restore annotations if this was an annotate-mode analysis
+            if (entry.outputMode === 'annotate') {
+              const annotations = await window.zhicrit.getHistoryAnnotations(id)
+              analysisStore.annotations = annotations || []
+            }
           } else {
             window.__toast?.warning('该历史记录没有报告内容')
           }

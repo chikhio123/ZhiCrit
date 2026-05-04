@@ -123,6 +123,10 @@ function getReportPath(id) {
   return path.join(getHistoryDir(), `analysis-${id}.md`)
 }
 
+function getAnnotationsPath(id) {
+  return path.join(getHistoryDir(), `analysis-${id}-annotations.json`)
+}
+
 function loadPrompt(name) {
   const promptPath = getPromptPath(name)
   return fs.readFileSync(promptPath, 'utf-8')
@@ -259,12 +263,10 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', output
     let reportText = null
     let annotateResult = null
 
-    // Report: run only in report mode, or reuse cached
+    // Report: always generate — needed for mode switching between report/annotate
     if (prevSteps && prevSteps.report) {
       reportText = prevSteps.report.markdown
       send({ step: 'report', status: 'done', result: { markdown: reportText }, cached: true })
-    } else if (isAnnotate) {
-      send({ step: 'report', status: 'done', result: { skipped: true } })
     } else {
       send({ step: 'report', status: 'running' })
       if (config.streaming) {
@@ -313,9 +315,14 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', output
       const issueCount = detectResult?.issues?.length || 0
 
       try {
-        // Annotate mode may not have reportText — provide a placeholder
         const content = reportText || `# 标注模式分析\n\n该分析使用标注模式，未生成传统报告。\n\n标注数量：${annotateResult?.annotations?.length || 0}`
         fs.writeFileSync(getReportPath(id), content, 'utf-8')
+
+        // Also persist annotations as sidecar JSON for annotate mode restoration
+        const anns = annotateResult?.annotations
+        if (anns && anns.length) {
+          fs.writeFileSync(getAnnotationsPath(id), JSON.stringify(anns, null, 2), 'utf-8')
+        }
 
         // Deduplicate: same article → overwrite old entry instead of adding a duplicate
         const list = loadHistory()
@@ -325,6 +332,10 @@ ipcMain.handle('analyze:start', async (event, articleText, mode = 'deep', output
           const oldReport = getReportPath(oldId)
           if (oldId !== id && fs.existsSync(oldReport)) {
             fs.unlinkSync(oldReport)
+          }
+          const oldAnnotations = getAnnotationsPath(oldId)
+          if (fs.existsSync(oldAnnotations)) {
+            fs.unlinkSync(oldAnnotations)
           }
           list.splice(dupIdx, 1)
         }
@@ -366,6 +377,18 @@ ipcMain.handle('history:get', (_event, id) => {
   return null
 })
 
+ipcMain.handle('history:getAnnotations', (_event, id) => {
+  const p = getAnnotationsPath(id)
+  if (fs.existsSync(p)) {
+    try {
+      return JSON.parse(fs.readFileSync(p, 'utf-8'))
+    } catch {
+      return []
+    }
+  }
+  return []
+})
+
 ipcMain.handle('history:delete', (_event, id) => {
   const list = loadHistory()
   const idx = list.findIndex(e => e.id === id)
@@ -376,6 +399,10 @@ ipcMain.handle('history:delete', (_event, id) => {
   const rp = getReportPath(id)
   if (fs.existsSync(rp)) {
     fs.unlinkSync(rp)
+  }
+  const ap = getAnnotationsPath(id)
+  if (fs.existsSync(ap)) {
+    fs.unlinkSync(ap)
   }
   return { success: true }
 })

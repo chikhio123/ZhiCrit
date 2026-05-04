@@ -18,5 +18,6 @@ contextBridge.exposeInMainWorld('zhicrit', {
   },
   listHistory: () => ipcRenderer.invoke('history:list'),
   getHistory: (id) => ipcRenderer.invoke('history:get', id),
+  getHistoryAnnotations: (id) => ipcRenderer.invoke('history:getAnnotations', id),
   deleteHistory: (id) => ipcRenderer.invoke('history:delete', id)
 })

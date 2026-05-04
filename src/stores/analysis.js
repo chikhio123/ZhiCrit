@@ -69,34 +69,19 @@ export const useAnalysisStore = defineStore('analysis', {
         return
       }
 
-      // Cache: same article + same depth → instant mode switch
-      // Only when switching to a different output mode that already has results
-      const sameRequest = this.articleText === this.lastAnalyzedText && this.mode === this.lastMode
-      if (sameRequest && this.status === 'done') {
-        if (this.outputMode === 'annotate' && this.outputMode !== this.lastOutputMode && this.annotations.length) {
-          window.__toast?.success('已切换至标注模式～')
-          return
-        }
-        if (this.outputMode === 'report' && this.outputMode !== this.lastOutputMode && this.report) {
-          window.__toast?.success('已切换至分析模式～')
-          return
-        }
-      }
-
-      // Capture existing results to avoid re-running steps — only if same article
-      // and the results are real (not skip placeholders from quick mode).
+      // Capture existing results to avoid re-running steps — only for annotate mode
+      // Annotate reuses triage/extract/detect from a previous analysis.
+      // Report mode always runs full analysis from scratch.
       const sameArticle = this.articleText === this.lastAnalyzedText
       const prevSteps = {}
-      if (sameArticle) {
+      if (sameArticle && this.outputMode === 'annotate') {
         for (const key of ['triage', 'extract', 'detect']) {
           const r = this.steps[key].result
           if (this.steps[key].status === 'done' && r && !r.skipped) {
-            // Deep-clone to strip Vue reactive proxies — IPC needs plain objects
             prevSteps[key] = JSON.parse(JSON.stringify(r))
           }
         }
-        // Pass existing report to annotate for richer context
-        if (this.outputMode === 'annotate' && this.report) {
+        if (this.report) {
           prevSteps.report = { markdown: this.report }
         }
       }

@@ -135,8 +135,9 @@ async function handleSave() {
 
 <template>
   <div class="report-view" @click="dismissTooltip">
-    <!-- ===== 标注模式：直接显示标注视图 ===== -->
-    <template v-if="isAnnotateMode && analysisStore.isDone">
+    <!-- ===== 标注模式 ===== -->
+    <template v-if="isAnnotateMode">
+      <template v-if="analysisStore.isDone">
       <div class="report-toolbar">
         <div class="toolbar-left">
           <span class="level-badge" :class="`level-${analysisStore.level}`">
@@ -163,6 +164,13 @@ async function handleSave() {
         <div v-else class="annotate-empty">
           <p>标注数据暂不可用</p>
           <p class="sub">可能是标注步骤未完成，或标注结果无法匹配到原文</p>
+        </div>
+      </div>
+      </template>
+      <div v-else-if="analysisStore.isRunning && hasIntermediate" class="intermediate-view">
+        <div class="intermediate-header">
+          <span class="intermediate-badge">标注生成中</span>
+          <span class="intermediate-hint">标注完成后将自动显示</span>
         </div>
       </div>
     </template>
@@ -687,20 +695,35 @@ async function handleSave() {
   transform: translateY(10px);
 }
 
-/* ── Step transition ── */
+/* ── Step transition: staggered cascade ── */
 .step-in-enter-active {
-  transition: all 0.35s ease-out;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .step-in-enter-from {
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(12px) scale(0.97);
 }
 .step-in-leave-active {
   transition: all 0.2s ease-in;
+  position: absolute;
 }
 .step-in-leave-to {
   opacity: 0;
-  transform: translateY(-6px);
+}
+
+/* Stagger each card's entrance */
+.step-in-enter-active:nth-child(1) { transition-delay: 0s; }
+.step-in-enter-active:nth-child(2) { transition-delay: 0.06s; }
+.step-in-enter-active:nth-child(3) { transition-delay: 0.12s; }
+.step-in-enter-active:nth-child(4) { transition-delay: 0.18s; }
+
+/* ── Report entrance ── */
+.report-in-enter-active {
+  transition: all 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.report-in-enter-from {
+  opacity: 0;
+  transform: translateY(16px);
 }
 
 /* ── Intermediate Results ── */
@@ -771,7 +794,19 @@ async function handleSave() {
 
 .inter-dot.running {
   background: var(--accent);
-  animation: typing 1.2s ease-in-out infinite;
+  animation: dot-pulse 1s ease-in-out infinite;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.6); }
+}
+
+/* Running card subtle glow */
+.inter-pending {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-glow);
 }
 
 .inter-card-title {
