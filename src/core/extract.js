@@ -22,6 +22,9 @@ async function extract(articleText, config, loadPrompt) {
       conclusion: '',
       scope_claimed: '',
       scope_supported: '',
+      core_observation_valid: false,
+      core_observation_notes: '',
+      confidence_notes: '解析失败，无法判断结构置信度',
       raw: content
     }
   }

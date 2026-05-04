@@ -21,13 +21,14 @@ async function annotate(articleText, triageResult, extractResult, detectResult, 
       strengths: triageResult?.strengths || ''
     },
     extract: {
-      strengths: extractResult?.strengths || [],
-      core_observation_valid: extractResult?.core_observation_valid
+      core_observation_valid: extractResult?.core_observation_valid,
+      confidence_notes: extractResult?.confidence_notes || ''
     },
     detect: {
       issues: detectResult?.issues || [],
       strengths: detectResult?.strengths || [],
-      strength_level: detectResult?.strength_level
+      strength_level: detectResult?.strength_level,
+      reasoning_chain_assessment: detectResult?.reasoning_chain_assessment || []
     }
   }
 

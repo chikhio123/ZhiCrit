@@ -78,7 +78,8 @@ const issueTypeLabel = (type) => ({
   strawman: '稻草人', false_attribution: '错误归因', survivorship: '幸存者偏差',
   scope_overflow: '覆盖溢出', term_swap: '偷换概念', missing_argument: '论证缺失',
   overstatement: '过度断言', weak_transition: '弱过渡', is_ought_gap: '实然-应然跳跃',
-  category_error: '范畴错误', contradiction: '自相矛盾'
+  category_error: '范畴错误', contradiction: '自相矛盾',
+  false_dichotomy: '虚假二分', performative_contradiction: '表演性矛盾'
 }[type] || type)
 
 const severityLabel = (s) => ({ critical: '严重', major: '主要', minor: '次要' }[s] || s)

@@ -55,7 +55,8 @@
   "scope_claimed": "作者声称的适用范围",
   "scope_supported": "论证实际支撑的范围（如与claimed相同则填'同声称范围'）",
   "core_observation_valid": true,
-  "core_observation_notes": "核心观察是否触及真实问题？具体是什么？"
+  "core_observation_notes": "核心观察是否触及真实问题？具体是什么？",
+  "confidence_notes": "哪些结构判断比较确定？哪些可能有争议或存在替代解读？"
 }
 ```
 
@@ -66,3 +67,4 @@
 - 推理类型要准确，不确定时使用最接近的类型并标注"疑似"
 - 范围差（scope_claimed vs scope_supported）是后续分析的重点
 - 核心观察是否成立是后续分析步骤的起点——如实记录，不要把局部观察拔高到核心级别
+- `confidence_notes` 很重要：后续步骤（detect）会以你的推理链为骨架。如果你的某个结构判断不太确定，在这里诚实标注——"P2 可能是作者的修辞而非真实前提""核心主张存在另一种理解"——让下游知道哪里该踩实、哪里该留余

@@ -88,6 +88,16 @@
 5. 收束简短有力，不在已有分析之外添加新判断
 6. 语气冷静、准确，就事论事——不嘲讽，不居高临下，不自以为聪明
 
+## 如何使用 reasoning_chain_assessment
+
+如果 detectResult 包含 `reasoning_chain_assessment`，报告必须优先依据它组织内容：
+
+- **论证结构**节：直接引用 reasoning_chain_assessment 中的步骤，区分 `holds: true` 和 `holds: false`
+- **可取之处**：对应 `holds: true` 的步骤——这些是论证中站得住的部分，展开论述为什么
+- **问题清单**：对应 `holds: false` 的步骤——围绕断裂的推理步骤展开，不孤立罗列 issue。每个问题的描述应说明"从哪一步到哪一步断了"
+- 不要把 issues 当作独立标签列表来写；issues 是 reasoning_chain_assessment 的展开说明
+- 如果 extractResult 的 `confidence_notes` 对某些结构判断有保留，报告中相应部分应保留余地
+
 ## 注意事项
 
 - 你是在整合已有分析，不是在重新分析——严格基于提供给你的预判结果、论证结构和问题标记来写报告
