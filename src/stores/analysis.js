@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { useHistoryStore } from './history.js'
+import { addHistoryEntry } from './history-bridge.js'
 
 export const useAnalysisStore = defineStore('analysis', {
   state: () => ({
@@ -121,8 +121,7 @@ export const useAnalysisStore = defineStore('analysis', {
 
           // Persist to localStorage as backup (Electron main saves to file)
           if (result.level !== 'skip') {
-            const historyStore = useHistoryStore()
-            historyStore.addEntry(this.articleText, result)
+            addHistoryEntry(this.articleText, result)
           }
 
           if (result.level === 'skip') {
@@ -158,8 +157,7 @@ export const useAnalysisStore = defineStore('analysis', {
           this.lastOutputMode = this.outputMode
 
           if (result.level !== 'skip') {
-            const historyStore = useHistoryStore()
-            historyStore.addEntry(this.articleText, result)
+            addHistoryEntry(this.articleText, result)
           }
         }
         return

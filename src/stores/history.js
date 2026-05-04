@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { useAnalysisStore } from './analysis.js'
+import { initHistoryBridge } from './history-bridge.js'
 
 export const useHistoryStore = defineStore('history', {
   state: () => ({
@@ -48,6 +49,7 @@ export const useHistoryStore = defineStore('history', {
 
   actions: {
     async loadList() {
+      initHistoryBridge(this)
       if (this._loadPromise) return this._loadPromise
       this._loadPromise = this._doLoad()
       try {
@@ -126,43 +128,6 @@ export const useHistoryStore = defineStore('history', {
       } catch (e) {
         console.error('Failed to delete history entry:', e)
       }
-    },
-
-    addEntry(articleText, result) {
-      const now = new Date()
-      const id = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
-      const wordCount = articleText.length
-      const preview = articleText.replace(/\s+/g, '').slice(0, 40)
-      const issueCount = (result.annotations || []).length || 0
-
-      // Deduplicate
-      const dupIdx = this.list.findIndex(e => e.articleText === articleText)
-      if (dupIdx !== -1) {
-        const oldId = this.list[dupIdx].id
-        this.list.splice(dupIdx, 1)
-        localStorage.removeItem(`zhicrit-history-${oldId}`)
-      }
-
-      const entry = {
-        id,
-        date: now.toISOString(),
-        preview,
-        wordCount,
-        level: result.level,
-        issueCount,
-        outputMode: result.outputMode,
-        articleText
-      }
-      this.list.unshift(entry)
-
-      // Save report content to localStorage (browser fallback)
-      if (result.report) {
-        try {
-          localStorage.setItem(`zhicrit-history-${id}`, result.report)
-        } catch (_) { /* quota exceeded, non-critical */ }
-      }
-
-      this._syncLocal()
     },
 
     _syncLocal() {
