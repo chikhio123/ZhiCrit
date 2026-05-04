@@ -44,13 +44,13 @@ const { registerHandlers } = require('./ipc-handlers')
 registerHandlers({
   getMainWindow: () => mainWindow,
   userDataPath,
-  loadConfig: () => loadConfig(userDataPath),
-  saveConfig: (c) => saveConfig(userDataPath, c),
-  loadHistory: () => loadHistory(userDataPath),
-  saveHistory: (list) => saveHistory(userDataPath, list),
-  getReportPath: (id) => getReportPath(userDataPath, id),
-  getAnnotationsPath: (id) => getAnnotationsPath(userDataPath, id),
-  deleteHistoryFiles: (id) => deleteHistoryFiles(userDataPath, id),
+  loadConfig,
+  saveConfig,
+  loadHistory,
+  saveHistory,
+  getReportPath,
+  getAnnotationsPath,
+  deleteHistoryFiles,
   analyzeHandler
 })
 
@@ -166,7 +166,8 @@ async function analyzeHandler(event, articleText, mode = 'deep', outputMode = 'r
       level: isQuick ? 'quick' : 'deep',
       outputMode,
       report: reportText,
-      annotations: annotateResult?.annotations || []
+      annotations: annotateResult?.annotations || [],
+      issueCount: detectResult?.issues?.length || annotateResult?.annotations?.length || 0
     }
     send({ step: 'done', result: finalResult })
 

@@ -21,7 +21,7 @@ export function addHistoryEntry(articleText, result) {
   const id = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
   const wordCount = articleText.length
   const preview = articleText.replace(/\s+/g, '').slice(0, 40)
-  const issueCount = (result.annotations || []).length || 0
+  const issueCount = (result.issueCount ?? (result.annotations || []).length) || 0
 
   // Deduplicate
   const dupIdx = list.findIndex(e => e.articleText === articleText)
